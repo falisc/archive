@@ -484,7 +484,7 @@ function UI:Window(opts)
         if W._topTabs then
             -- Compact inline player card with pill background, right-aligned before window buttons
             local iconSize  = 22
-            local nameText  = shownName
+            local nameText  = _plrSpoofed and "spoofed" or ("@".._dispName)
             local nameW     = math.min(#nameText * 7 + 4, 90)  -- dynamic, capped
             local spoofW    = 16
             local cardPad   = 6
@@ -506,6 +506,7 @@ function UI:Window(opts)
             dPlrInitial.Visible  = isVis; ft(dPlrInitial)
             -- name
             dPlrName.Position = H.Vec2(iconX + iconSize + 5, cardY + cardH/2 - 7)
+            dPlrName.Text = (_plrSpoofed and "spoofed" or ("@".._dispName))
             dPlrName.Visible  = isVis; ft(dPlrName)
             dPlrDisp.Visible  = false
             -- spoof button
