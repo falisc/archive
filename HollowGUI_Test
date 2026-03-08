@@ -295,6 +295,10 @@ function UI:Window(opts)
     W._pos    = H.Vec2(vp.X/2 - W.Size.X/2, vp.Y/2 - W.Size.Y/2)
 
     local dBg   = H.Sq(10) ; dBg.Color   = Theme.Background ; W._drawings.bg   = dBg
+    -- Outline: sharp 1px border ring exactly on the window edge
+    local dOutline  = H.Sq(9,false,CR)  ; dOutline.Color  = Theme.Accent   ; dOutline.Thickness  = 1 ; W._drawings.outline  = dOutline
+    -- Glow: slightly larger, accent-colored, semi-transparent — gives a soft halo
+    local dGlow     = H.Sq(8,false,CR+2) ; dGlow.Color    = Theme.Accent   ; dGlow.Thickness     = 1 ; W._drawings.glow     = dGlow
     local dTop  = H.Sq(11) ; dTop.Color  = Theme.TopBar      ; W._drawings.top  = dTop
     local dTopF = H.Sq(11,true,0) ; dTopF.Color = Theme.TopBar ; W._drawings.topF = dTopF
     local dSide = H.Sq(11,true,CR) ; dSide.Color = Theme.Sidebar ; W._drawings.side = dSide
@@ -373,6 +377,15 @@ function UI:Window(opts)
         dBg.Size      = H.Vec2(sz.X, totalH)
         dBg.Corner    = CR
         dBg.Visible   = isVis; f(dBg)
+
+        -- Sharp accent outline, exactly on the window border
+        dOutline.Position = pos; dOutline.Size = H.Vec2(sz.X, totalH); dOutline.Corner = CR
+        dOutline.Color = Theme.Accent; dOutline.Visible = isVis
+        if dOutline.Visible then dOutline.Transparency = _openProg * 0.55 end
+        -- Soft glow ring: 3px larger each side, very faint halo
+        dGlow.Position = pos - H.Vec2(3, 3); dGlow.Size = H.Vec2(sz.X + 6, totalH + 6); dGlow.Corner = CR + 3
+        dGlow.Color = Theme.Accent; dGlow.Visible = isVis
+        if dGlow.Visible then dGlow.Transparency = _openProg * 0.2 end
 
         dTop.Position = pos; dTop.Size = H.Vec2(sz.X, TH); dTop.Corner = CR; dTop.Visible = isVis; f(dTop)
         -- Bottom half of topbar fill (covers rounded corners bleed). In TopTabs mode extend to cover tab strip too.
@@ -550,26 +563,25 @@ function UI:Window(opts)
                 tabY = tabY + 38
             end
         else
-            -- Horizontal top tabs drawn in tab strip, centered
+            -- Horizontal top tabs drawn in tab strip, centered, all same width
             local stripY  = pos.Y + TH
             local tabH    = TTH
-            local tabGap  = 6    -- gap between tabs
-            local tabPadX = 16   -- horizontal text padding
-            -- measure tab widths based on text
-            local tabWidths = {}
-            local totalTabW = 0
+            local tabGap  = 4    -- gap between tabs
+            local tabPadX = 18   -- horizontal text padding
+            -- All tabs get the same width: based on the widest title
+            local maxTitleLen = 0
             for _, tab in ipairs(W._tabs) do
-                local tw = math.max(52, #tab._title * 8 + tabPadX * 2)
-                table.insert(tabWidths, tw)
-                totalTabW = totalTabW + tw + tabGap
+                if #tab._title > maxTitleLen then maxTitleLen = #tab._title end
             end
-            totalTabW = totalTabW - tabGap  -- remove trailing gap
+            local fixedTabW = math.max(64, maxTitleLen * 8 + tabPadX * 2)
+            local numTabs   = #W._tabs
+            local totalTabW = numTabs * fixedTabW + (numTabs - 1) * tabGap
             -- center the tab row in the full window width
-            local tabStartX = pos.X + math.floor(sz.X/2 - totalTabW/2)
+            local tabStartX = pos.X + math.floor(sz.X / 2 - totalTabW / 2)
             local tx = tabStartX
-            for i, tab in ipairs(W._tabs) do
-                tab._draw(tx, stripY, tabWidths[i], tabH, vis, fade)
-                tx = tx + tabWidths[i] + tabGap
+            for _, tab in ipairs(W._tabs) do
+                tab._draw(tx, stripY, fixedTabW, tabH, vis, fade)
+                tx = tx + fixedTabW + tabGap
             end
         end
     end
@@ -976,20 +988,27 @@ function UI:Window(opts)
                 local tabX, stripY, tabW, tabH, vis, fade = a, b, c, d, e, ff
                 local ia = W._activeTab == T
 
-                -- No pill background — clean underline style
-                dTB.Visible = false
+                -- Subtle active background pill (same width as tab, inset 1px vertically)
+                dTB.Position = H.Vec2(tabX, stripY + 4)
+                dTB.Size     = H.Vec2(tabW, tabH - 8)
+                dTB.Color    = Theme.TabActive
+                dTB.Corner   = CR
+                dTB.Visible  = vis and ia
+                if dTB.Visible then dTB.Transparency = fade end
 
-                -- Label centered in the strip row
-                local lx = tabX + math.floor(tabW/2 - #T._title * 4)
-                local ly = stripY + math.floor(tabH/2 - 7)
+                -- Label: perfectly centered in the tab cell
+                local charW = 7.5
+                local textW = #T._title * charW
+                local lx = tabX + math.floor((tabW - textW) / 2)
+                local ly = stripY + math.floor(tabH / 2 - 7)
                 dTL.Position = H.Vec2(lx, ly)
                 dTL.Color    = ia and Theme.Text or Theme.SubText
-                dTL.Size     = ia and 14 or 13
+                dTL.Size     = 13
                 dTL.Visible  = vis
 
-                -- Active underline: 2px bar, full tab width, flush at bottom of strip
-                dTUL.Position = H.Vec2(tabX, stripY + tabH - 2)
-                dTUL.Size     = H.Vec2(tabW, 2)
+                -- Active underline: 2px bar inset 4px each side, flush at bottom of strip
+                dTUL.Position = H.Vec2(tabX + 4, stripY + tabH - 2)
+                dTUL.Size     = H.Vec2(tabW - 8, 2)
                 dTUL.Color    = Theme.Accent
                 dTUL.Visible  = vis and ia
                 if vis and ia then dTUL.Transparency = fade end
