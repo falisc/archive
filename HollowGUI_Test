@@ -375,7 +375,9 @@ function UI:Window(opts)
         dBg.Visible   = isVis; f(dBg)
 
         dTop.Position = pos; dTop.Size = H.Vec2(sz.X, TH); dTop.Corner = CR; dTop.Visible = isVis; f(dTop)
-        dTopF.Position= pos + H.Vec2(0,TH/2); dTopF.Size = H.Vec2(sz.X,TH/2); dTopF.Visible = isVis; f(dTopF)
+        -- Bottom half of topbar fill (covers rounded corners bleed). In TopTabs mode extend to cover tab strip too.
+        local topFillH = W._topTabs and (TH/2 + TTH) or TH/2
+        dTopF.Position= pos + H.Vec2(0,TH/2); dTopF.Size = H.Vec2(sz.X, topFillH); dTopF.Visible = isVis; f(dTopF)
 
         -- Sidebar (only in sidebar mode)
         if not W._topTabs then
@@ -388,9 +390,12 @@ function UI:Window(opts)
 
         -- Tab strip (TopTabs mode only)
         if W._topTabs then
+            -- Tab strip matches topbar color — seamless look
             dTabStrip.Position = pos + H.Vec2(0, TH)
             dTabStrip.Size     = H.Vec2(sz.X, TTH)
+            dTabStrip.Color    = Theme.TopBar
             dTabStrip.Visible  = vis; f(dTabStrip)
+            -- Only one separator: below the tab strip, above the content
             dTabStripSep.From  = pos + H.Vec2(0, TH + TTH)
             dTabStripSep.To    = pos + H.Vec2(sz.X, TH + TTH)
             dTabStripSep.Visible = vis; f(dTabStripSep)
@@ -451,7 +456,8 @@ function UI:Window(opts)
         dMinSqBo.Position=H.Vec2(bkX,bkY); dMinSqBo.Size=H.Vec2(sqS,sqS); dMinSqBo.Color=Theme.MinimizeBtn; dMinSqBo.Corner=1; dMinSqBo.Visible=isVis; f(dMinSqBo)
         dMinSqF.Position=H.Vec2(ftX,ftY); dMinSqF.Size=H.Vec2(sqS,sqS); dMinSqF.Color=Theme.Text; dMinSqF.Corner=1; dMinSqF.Filled=true; dMinSqF.Visible=isVis; f(dMinSqF)
 
-        dSep.From=pos+H.Vec2(0,TH); dSep.To=pos+H.Vec2(sz.X,TH); dSep.Visible=isVis; f(dSep)
+        dSep.From=pos+H.Vec2(0,TH); dSep.To=pos+H.Vec2(sz.X,TH)
+        dSep.Visible = isVis and not W._topTabs; if dSep.Visible then f(dSep) end
 
         -- ── Player card ───────────────────────────────────────────────────
         -- TopTabs mode: compact card embedded in the topbar right side (before window buttons)
@@ -463,28 +469,38 @@ function UI:Window(opts)
         dPlrInitial.Text = string.upper(string.sub(shownName, 1, 1))
 
         if W._topTabs then
-            -- Compact inline player card: sits between subtitle and window buttons
-            -- icon circle + name, right-aligned before the minimize button
-            local iconSize = 22
-            local cardX    = mPos.X - iconSize - P*2 - 60  -- leave room for name
-            local cardY    = pos.Y + TH/2 - iconSize/2
-            -- player icon
-            dPlrIcon.Position = H.Vec2(cardX, cardY); dPlrIcon.Size = H.Vec2(iconSize, iconSize)
+            -- Compact inline player card with pill background, right-aligned before window buttons
+            local iconSize  = 22
+            local nameText  = shownName
+            local nameW     = math.min(#nameText * 7 + 4, 90)  -- dynamic, capped
+            local spoofW    = 16
+            local cardPad   = 6
+            local cardW     = cardPad + iconSize + 5 + nameW + 4 + spoofW + cardPad
+            local cardH     = 28
+            local cardX     = mPos.X - cardW - P
+            local cardY     = pos.Y + TH/2 - cardH/2
+            -- pill background
+            dPlrBg.Position = H.Vec2(cardX, cardY); dPlrBg.Size = H.Vec2(cardW, cardH)
+            dPlrBg.Corner   = CR; dPlrBg.Color = Theme.TabActive
+            dPlrBg.Visible  = isVis; f(dPlrBg)
+            dPlrBgFix.Visible = false; dPlrBgFixBR.Visible = false
+            -- icon
+            local iconX = cardX + cardPad
+            local iconY = cardY + cardH/2 - iconSize/2
+            dPlrIcon.Position = H.Vec2(iconX, iconY); dPlrIcon.Size = H.Vec2(iconSize, iconSize)
             dPlrIcon.Visible  = isVis; f(dPlrIcon)
-            dPlrInitial.Position = H.Vec2(cardX + iconSize/2 - 4, cardY + iconSize/2 - 6)
+            dPlrInitial.Position = H.Vec2(iconX + iconSize/2 - 4, iconY + iconSize/2 - 6)
             dPlrInitial.Visible  = isVis; ft(dPlrInitial)
-            -- name text only (no @handle in compact mode, no bg card)
-            dPlrName.Position = H.Vec2(cardX + iconSize + 5, pos.Y + TH/2 - 7)
+            -- name
+            dPlrName.Position = H.Vec2(iconX + iconSize + 5, cardY + cardH/2 - 7)
             dPlrName.Visible  = isVis; ft(dPlrName)
-            dPlrDisp.Visible  = false  -- hide handle in compact topbar
-            -- hide the card background panels
-            dPlrBg.Visible = false; dPlrBgFix.Visible = false; dPlrBgFixBR.Visible = false
-            -- spoof button: tiny pill right of the name
-            local spoofX = cardX + iconSize + 5 + 52
-            local spoofY = pos.Y + TH/2 - 9
+            dPlrDisp.Visible  = false
+            -- spoof button
+            local spoofX = iconX + iconSize + 5 + nameW + 4
+            local spoofY = cardY + cardH/2 - spoofW/2
             _plrSpoofRect.pos  = H.Vec2(spoofX, spoofY)
-            _plrSpoofRect.size = H.Vec2(16, 16)
-            dPlrSpoof.Position = H.Vec2(spoofX, spoofY); dPlrSpoof.Size = H.Vec2(16, 16)
+            _plrSpoofRect.size = H.Vec2(spoofW, spoofW)
+            dPlrSpoof.Position = H.Vec2(spoofX, spoofY); dPlrSpoof.Size = H.Vec2(spoofW, spoofW)
             dPlrSpoof.Color    = _plrSpoofed and Theme.Accent or Theme.MinimizeBtn
             dPlrSpoof.Visible  = isVis; f(dPlrSpoof)
         else
@@ -534,25 +550,26 @@ function UI:Window(opts)
                 tabY = tabY + 38
             end
         else
-            -- Horizontal top tabs drawn in tab strip
+            -- Horizontal top tabs drawn in tab strip, centered
             local stripY  = pos.Y + TH
-            local tabPad  = 14   -- horizontal padding inside each tab pill
             local tabH    = TTH
-            -- measure tab widths
+            local tabGap  = 6    -- gap between tabs
+            local tabPadX = 16   -- horizontal text padding
+            -- measure tab widths based on text
             local tabWidths = {}
             local totalTabW = 0
             for _, tab in ipairs(W._tabs) do
-                local tw = math.max(60, #tab._title * 8 + tabPad * 2)
+                local tw = math.max(52, #tab._title * 8 + tabPadX * 2)
                 table.insert(tabWidths, tw)
-                totalTabW = totalTabW + tw + 4  -- 4px gap between tabs
+                totalTabW = totalTabW + tw + tabGap
             end
-            -- start x: left-aligned with a small indent after the ghost+title area
-            local titleEndX = pos.X + P + gW + 12 + #W.Title * (Theme.TitleSize * 0.52) + (#W.Subtitle > 0 and #W.Subtitle * ((Theme.TitleSize-2) * 0.52) + 12 or 0) + P
-            local tabStartX = titleEndX + 8
+            totalTabW = totalTabW - tabGap  -- remove trailing gap
+            -- center the tab row in the full window width
+            local tabStartX = pos.X + math.floor(sz.X/2 - totalTabW/2)
             local tx = tabStartX
             for i, tab in ipairs(W._tabs) do
                 tab._draw(tx, stripY, tabWidths[i], tabH, vis, fade)
-                tx = tx + tabWidths[i] + 4
+                tx = tx + tabWidths[i] + tabGap
             end
         end
     end
@@ -958,29 +975,30 @@ function UI:Window(opts)
                 -- toptabs call: (tabX, stripY, tabW, tabH, vis, fade)
                 local tabX, stripY, tabW, tabH, vis, fade = a, b, c, d, e, ff
                 local ia = W._activeTab == T
-                -- pill background (only shown when active)
-                local pillH = tabH - 8
-                local pillY = stripY + (tabH - pillH) / 2
-                dTB.Position = H.Vec2(tabX, pillY)
-                dTB.Size     = H.Vec2(tabW, pillH)
-                dTB.Color    = ia and Theme.TabActive or Theme.Sidebar
-                dTB.Corner   = CR; dTB.Visible = vis
-                if vis then dTB.Transparency = fade end
-                -- label centered in pill
-                local lx = tabX + tabW/2 - #T._title * 4
-                local ly = pillY + pillH/2 - 7
+
+                -- No pill background — clean underline style
+                dTB.Visible = false
+
+                -- Label centered in the strip row
+                local lx = tabX + math.floor(tabW/2 - #T._title * 4)
+                local ly = stripY + math.floor(tabH/2 - 7)
                 dTL.Position = H.Vec2(lx, ly)
                 dTL.Color    = ia and Theme.Text or Theme.SubText
+                dTL.Size     = ia and 14 or 13
                 dTL.Visible  = vis
-                -- active underline bar: 3px tall, full pill width, at bottom of pill
-                dTUL.Position = H.Vec2(tabX + 4, pillY + pillH - 3)
-                dTUL.Size     = H.Vec2(tabW - 8, 3)
+
+                -- Active underline: 2px bar, full tab width, flush at bottom of strip
+                dTUL.Position = H.Vec2(tabX, stripY + tabH - 2)
+                dTUL.Size     = H.Vec2(tabW, 2)
+                dTUL.Color    = Theme.Accent
                 dTUL.Visible  = vis and ia
                 if vis and ia then dTUL.Transparency = fade end
-                -- store hit rect
-                T._rect.pos  = H.Vec2(tabX, pillY)
-                T._rect.size = H.Vec2(tabW, pillH)
-                -- hide sidebar drawings
+
+                -- Store hit rect (full height for easy clicking)
+                T._rect.pos  = H.Vec2(tabX, stripY)
+                T._rect.size = H.Vec2(tabW, tabH)
+
+                -- Hide sidebar drawings
                 dB.Visible=false; dT.Visible=false; dI.Visible=false
             end
         end
