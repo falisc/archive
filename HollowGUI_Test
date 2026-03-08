@@ -1,0 +1,1633 @@
+--[[
+    MatchaUI Library - Matcha Compatible
+    Uses polling-based input (ismouse1pressed, iskeypressed)
+    
+    DOCUMENTATION:
+    ==============
+    
+    local Window = UI:Window({
+        Title = "My Script",
+        Subtitle = "v1.0",
+        Size = Vector2.new(750, 500),
+        Key = 0xA1,       -- optional: key to toggle the window (default = none)
+        TopTabs = false,  -- optional: if true, tabs render horizontally at the top instead of a sidebar (default = false)
+    })
+    
+    local Tab = Window:Tab({ Title = "Movement" })
+    
+    -- Side by side sections:
+    local Left, Right = Tab:Row({ Title = "Left" }, { Title = "Right" })
+    
+    -- Full width section:
+    local Full = Tab:Section({ Title = "Full Width" })
+    
+    -- Widgets:
+    Section:Label({ Title = "Some text" })
+    Section:Button({ Title = "Click Me" }, function() end)
+    Section:Toggle({ Title = "Enable", Default = false }, function(bool) end)
+    Section:Slider({ Title = "Speed", Min = 0, Max = 100, Default = 50, Suffix = "%" }, function(num) end)
+    Section:Dropdown({ Title = "Mode", Options = {"A","B","C"}, Default = "A" }, function(val) end)
+    Section:MultiDropdown({ Title = "Items", Options = {"X","Y","Z"}, Default = {} }, function(tbl) end)
+    Section:Keybind({ Title = "Teleport", Key = 0x54 }, function() end, function(key) end)
+    
+    -- Common virtual key codes:
+    -- RightShift=0xA1, LeftShift=0xA0, R=0x52, T=0x54, F=0x46, G=0x47
+    -- Full list: https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes
+    
+    -- Get/Set:
+    local t = Section:Toggle(...); t:Get(); t:Set(true)
+    local s = Section:Slider(...);  s:Get(); s:Set(50)
+    local l = Section:Label(...);   l:Get(); l:Set("text")
+    local d = Section:Dropdown(...); d:Get(); d:Set("B")
+    local m = Section:MultiDropdown(...); m:Get(); m:Set({}); m:Add("X"); m:Remove("X"); m:Toggle("X")
+    
+    Window:Toggle()        -- toggle visibility
+    Window:Toggle(true)    -- force open
+    Window:Toggle(false)   -- force close
+    Window:SetKey(0xA1)    -- change window toggle key at any time (default RightShift)
+    Window:SetKey(nil)     -- disable window toggle key
+    Window:Unload()        -- destroy UI
+]]
+
+local Players     = game:GetService("Players")
+local LocalPlayer = Players.LocalPlayer
+local Mouse       = LocalPlayer:GetMouse()
+
+local Themes = {}
+
+-- Discord: blurple-based dark theme
+Themes.Discord = {
+    Background    = Color3.fromRGB(18, 18, 20),
+    Sidebar       = Color3.fromRGB(23, 23, 26),
+    TopBar        = Color3.fromRGB(23, 23, 26),
+    Section       = Color3.fromRGB(28, 28, 32),
+    SectionHeader = Color3.fromRGB(35, 35, 40),
+    Accent        = Color3.fromRGB(100, 100, 220),
+    TabActive     = Color3.fromRGB(38, 38, 48),
+    Text          = Color3.fromRGB(240, 240, 240),
+    SubText       = Color3.fromRGB(160, 160, 170),
+    ToggleOff     = Color3.fromRGB(60, 60, 70),
+    ToggleOn      = Color3.fromRGB(100, 100, 220),
+    SliderFill    = Color3.fromRGB(100, 100, 220),
+    SliderBg      = Color3.fromRGB(45, 45, 55),
+    Border        = Color3.fromRGB(45, 45, 55),
+    CloseBtn      = Color3.fromRGB(100, 100, 220),
+    MinimizeBtn   = Color3.fromRGB(60, 60, 70),
+    Corner        = 6,
+    Padding       = 8,
+    FontSize      = 14,
+    TitleSize     = 18,
+}
+
+-- Crimson: deep red & black
+Themes.Crimson = {
+    Background    = Color3.fromRGB(10, 8, 8),
+    Sidebar       = Color3.fromRGB(16, 10, 10),
+    TopBar        = Color3.fromRGB(16, 10, 10),
+    Section       = Color3.fromRGB(22, 14, 14),
+    SectionHeader = Color3.fromRGB(30, 16, 16),
+    Accent        = Color3.fromRGB(180, 30, 45),
+    TabActive     = Color3.fromRGB(32, 18, 18),
+    Text          = Color3.fromRGB(240, 220, 220),
+    SubText       = Color3.fromRGB(160, 130, 130),
+    ToggleOff     = Color3.fromRGB(55, 35, 35),
+    ToggleOn      = Color3.fromRGB(180, 30, 45),
+    SliderFill    = Color3.fromRGB(180, 30, 45),
+    SliderBg      = Color3.fromRGB(40, 22, 22),
+    Border        = Color3.fromRGB(50, 25, 25),
+    CloseBtn      = Color3.fromRGB(180, 30, 45),
+    MinimizeBtn   = Color3.fromRGB(55, 35, 35),
+    Corner        = 6,
+    Padding       = 8,
+    FontSize      = 14,
+    TitleSize     = 18,
+}
+
+-- Midnight: deep navy blue
+Themes.Midnight = {
+    Background    = Color3.fromRGB(8, 10, 18),
+    Sidebar       = Color3.fromRGB(10, 13, 24),
+    TopBar        = Color3.fromRGB(10, 13, 24),
+    Section       = Color3.fromRGB(14, 18, 32),
+    SectionHeader = Color3.fromRGB(18, 24, 42),
+    Accent        = Color3.fromRGB(60, 130, 255),
+    TabActive     = Color3.fromRGB(18, 24, 40),
+    Text          = Color3.fromRGB(220, 230, 255),
+    SubText       = Color3.fromRGB(130, 150, 200),
+    ToggleOff     = Color3.fromRGB(35, 45, 75),
+    ToggleOn      = Color3.fromRGB(60, 130, 255),
+    SliderFill    = Color3.fromRGB(60, 130, 255),
+    SliderBg      = Color3.fromRGB(25, 32, 58),
+    Border        = Color3.fromRGB(30, 40, 70),
+    CloseBtn      = Color3.fromRGB(60, 130, 255),
+    MinimizeBtn   = Color3.fromRGB(35, 45, 75),
+    Corner        = 6,
+    Padding       = 8,
+    FontSize      = 14,
+    TitleSize     = 18,
+}
+
+-- Forest: deep green
+Themes.Forest = {
+    Background    = Color3.fromRGB(8, 14, 10),
+    Sidebar       = Color3.fromRGB(10, 18, 12),
+    TopBar        = Color3.fromRGB(10, 18, 12),
+    Section       = Color3.fromRGB(12, 22, 15),
+    SectionHeader = Color3.fromRGB(16, 28, 18),
+    Accent        = Color3.fromRGB(50, 180, 80),
+    TabActive     = Color3.fromRGB(14, 26, 17),
+    Text          = Color3.fromRGB(210, 240, 215),
+    SubText       = Color3.fromRGB(120, 165, 130),
+    ToggleOff     = Color3.fromRGB(30, 55, 35),
+    ToggleOn      = Color3.fromRGB(50, 180, 80),
+    SliderFill    = Color3.fromRGB(50, 180, 80),
+    SliderBg      = Color3.fromRGB(18, 40, 22),
+    Border        = Color3.fromRGB(22, 48, 28),
+    CloseBtn      = Color3.fromRGB(50, 180, 80),
+    MinimizeBtn   = Color3.fromRGB(30, 55, 35),
+    Corner        = 6,
+    Padding       = 8,
+    FontSize      = 14,
+    TitleSize     = 18,
+}
+
+-- Ash: clean light grey
+Themes.Ash = {
+    Background    = Color3.fromRGB(28, 28, 30),
+    Sidebar       = Color3.fromRGB(36, 36, 38),
+    TopBar        = Color3.fromRGB(36, 36, 38),
+    Section       = Color3.fromRGB(44, 44, 46),
+    SectionHeader = Color3.fromRGB(52, 52, 54),
+    Accent        = Color3.fromRGB(180, 180, 190),
+    TabActive     = Color3.fromRGB(50, 50, 54),
+    Text          = Color3.fromRGB(245, 245, 248),
+    SubText       = Color3.fromRGB(165, 165, 170),
+    ToggleOff     = Color3.fromRGB(80, 80, 85),
+    ToggleOn      = Color3.fromRGB(180, 180, 190),
+    SliderFill    = Color3.fromRGB(180, 180, 190),
+    SliderBg      = Color3.fromRGB(62, 62, 66),
+    Border        = Color3.fromRGB(65, 65, 70),
+    CloseBtn      = Color3.fromRGB(180, 180, 190),
+    MinimizeBtn   = Color3.fromRGB(80, 80, 85),
+    Corner        = 6,
+    Padding       = 8,
+    FontSize      = 14,
+    TitleSize     = 18,
+}
+
+local Theme = Themes.Discord  -- default
+
+local H = {}
+function H.Vec2(x, y) return Vector2.new(x, y) end
+function H.MousePos() return H.Vec2(Mouse.X, Mouse.Y) end
+function H.InRect(pos, size)
+    local m = H.MousePos()
+    return m.X >= pos.X and m.X <= pos.X + size.X and m.Y >= pos.Y and m.Y <= pos.Y + size.Y
+end
+function H.TextSize(text, size)
+    return H.Vec2(#text * (size or Theme.FontSize) * 0.55, size or Theme.FontSize)
+end
+function H.InClip(py, ph, ct, cb)
+    if not ct or not cb then return true end
+    return (py + ph) > ct and py < cb
+end
+function H.TxtClip(py, fs, ct, cb)
+    if not ct or not cb then return true end
+    return (py + fs) <= cb and (py + fs) > ct
+end
+function H.Sq(z, filled, corner)
+    local s = Drawing.new("Square")
+    s.Filled = filled ~= false; s.ZIndex = z or 0; s.Corner = corner or 0; s.Visible = false
+    return s
+end
+function H.Txt(z, size, outline)
+    local t = Drawing.new("Text")
+    t.ZIndex = z or 0; t.Size = size or Theme.FontSize; t.Outline = outline ~= false
+    t.Font = Drawing.Fonts.SystemBold; t.Visible = false
+    return t
+end
+function H.Ln(z, thickness)
+    local l = Drawing.new("Line")
+    l.ZIndex = z or 0; l.Thickness = thickness or 1; l.Visible = false
+    return l
+end
+function H.Circ(z)
+    local c = Drawing.new("Circle")
+    c.Filled = true; c.ZIndex = z or 0; c.Visible = false
+    return c
+end
+function H.KeyName(key)
+    if not key then return "NONE" end
+    local n = {
+        [0x41]="A",[0x42]="B",[0x43]="C",[0x44]="D",[0x45]="E",[0x46]="F",[0x47]="G",
+        [0x48]="H",[0x49]="I",[0x4A]="J",[0x4B]="K",[0x4C]="L",[0x4D]="M",[0x4E]="N",
+        [0x4F]="O",[0x50]="P",[0x51]="Q",[0x52]="R",[0x53]="S",[0x54]="T",[0x55]="U",
+        [0x56]="V",[0x57]="W",[0x58]="X",[0x59]="Y",[0x5A]="Z",
+        [0x30]="0",[0x31]="1",[0x32]="2",[0x33]="3",[0x34]="4",
+        [0x35]="5",[0x36]="6",[0x37]="7",[0x38]="8",[0x39]="9",
+        [0x70]="F1",[0x71]="F2",[0x72]="F3",[0x73]="F4",[0x74]="F5",[0x75]="F6",
+        [0x76]="F7",[0x77]="F8",[0x78]="F9",[0x79]="F10",[0x7A]="F11",[0x7B]="F12",
+        [0xA0]="LShift",[0xA1]="RShift",[0xA2]="LCtrl",[0xA3]="RCtrl",
+        [0x1B]="Esc",[0x20]="Space",[0x0D]="Enter",[0x08]="Back",[0x09]="Tab",
+    }
+    return n[key] or ("0x"..string.format("%X", key))
+end
+
+local ALL_KEYS = {
+    0x41,0x42,0x43,0x44,0x45,0x46,0x47,0x48,0x49,0x4A,0x4B,0x4C,0x4D,
+    0x4E,0x4F,0x50,0x51,0x52,0x53,0x54,0x55,0x56,0x57,0x58,0x59,0x5A,
+    0x70,0x71,0x72,0x73,0x74,0x75,0x76,0x77,0x78,0x79,0x7A,0x7B,
+    0xA0,0xA1,0xA2,0xA3,0x1B,0x20,0x0D,
+}
+
+local Input = {
+    m1 = false, m1Last = false, m1Down = false, m1Up = false,
+    keys = {}, keysLast = {}, keysDown = {},
+}
+function Input.Poll(tracked)
+    Input.m1Last = Input.m1
+    Input.m1     = ismouse1pressed()
+    Input.m1Down = Input.m1 and not Input.m1Last
+    Input.m1Up   = not Input.m1 and Input.m1Last
+    local seen = {}
+    for _, k in ipairs(tracked) do
+        if not seen[k] then
+            seen[k] = true
+            Input.keysLast[k] = Input.keys[k]
+            Input.keys[k]     = iskeypressed(k)
+            Input.keysDown[k] = Input.keys[k] and not Input.keysLast[k]
+        end
+    end
+end
+
+-- ============================================================
+UI = {}
+UI.__index = UI
+
+function UI:Window(opts)
+    opts = opts or {}
+    local W       = {}
+    W.Title       = opts.Title    or "MatchaUI"
+    W.Subtitle    = opts.Subtitle or ""
+    W.Size        = opts.Size     or Vector2.new(750, 500)
+    W.Key         = opts.Key      or 0xA1
+    W._open       = true
+    W._minimized  = false
+    W._running    = true
+    W._dragging   = false
+    W._dragOff    = H.Vec2(0,0)
+    W._pos        = H.Vec2(0,0)
+    W._tabs       = {}
+    W._activeTab  = nil
+    W._drawings   = {}
+    if opts.Theme and Themes[opts.Theme] then Theme = Themes[opts.Theme] end
+    W._tracked    = { W.Key, 0x1B }
+    W._topTabs    = opts.TopTabs == true
+    local _openProg = 0
+    local _minProg  = 1
+
+    local SB    = W._topTabs and 0 or 180   -- no sidebar in TopTabs mode
+    local TH    = 46                          -- title bar height
+    local TTH   = W._topTabs and 38 or 0    -- tab strip height (TopTabs only)
+    local P     = Theme.Padding
+    local CR    = (opts.Rounded == false) and 0 or Theme.Corner
+    local vp  = game:GetService("Workspace").CurrentCamera.ViewportSize
+    W._pos    = H.Vec2(vp.X/2 - W.Size.X/2, vp.Y/2 - W.Size.Y/2)
+
+    local dBg   = H.Sq(10) ; dBg.Color   = Theme.Background ; W._drawings.bg   = dBg
+    local dTop  = H.Sq(11) ; dTop.Color  = Theme.TopBar      ; W._drawings.top  = dTop
+    local dTopF = H.Sq(11,true,0) ; dTopF.Color = Theme.TopBar ; W._drawings.topF = dTopF
+    local dSide = H.Sq(11,true,CR) ; dSide.Color = Theme.Sidebar ; W._drawings.side = dSide
+    local dSideTop = H.Sq(11,true,0) ; dSideTop.Color = Theme.Sidebar ; W._drawings.sideTop = dSideTop
+    local dSideB= H.Sq(12,true,0) ; dSideB.Color= Theme.Border ; W._drawings.sideB= dSideB
+    local dTtl  = H.Txt(13,Theme.TitleSize) ; dTtl.Color=Theme.Text    ; dTtl.Text=W.Title    ; W._drawings.ttl=dTtl
+    local dSub  = H.Txt(13,Theme.TitleSize-2) ; dSub.Color=Theme.SubText ; dSub.Text=W.Subtitle ; W._drawings.sub=dSub
+    local dCls  = H.Sq(13,true,CR)  ; dCls.Color = Theme.CloseBtn   ; W._drawings.cls  = dCls
+    local dCX1  = H.Ln(14,2)       ; dCX1.Color = Theme.Text        ; W._drawings.cx1  = dCX1
+    local dCX2  = H.Ln(14,2)       ; dCX2.Color = Theme.Text        ; W._drawings.cx2  = dCX2
+    local dMin    = H.Sq(13,true,CR) ; dMin.Color = Theme.MinimizeBtn ; W._drawings.min    = dMin
+    -- Double-square restore icon: back square (filled) + front square (outline via 4 lines)
+    local dMinSqB = H.Sq(14,true,2)  ; dMinSqB.Color = Theme.MinimizeBtn ; W._drawings.minSqB = dMinSqB  -- back filled
+    local dMinSqF = H.Sq(14,false,2) ; dMinSqF.Color = Theme.Text        ; W._drawings.minSqF = dMinSqF  -- front outline
+    local dMinSqBo= H.Sq(15,false,2) ; dMinBo_color = Theme.Text ; dMinSqBo.Color = Theme.Text ; W._drawings.minSqBo= dMinSqBo -- back outline
+    local dSep  = H.Ln(12,1)       ; dSep.Color = Theme.Border      ; W._drawings.sep  = dSep
+
+    -- TopTabs: horizontal tab strip background + bottom separator
+    local dTabStrip    = H.Sq(11,true,0)  ; dTabStrip.Color = Theme.Sidebar    ; W._drawings.tabStrip    = dTabStrip
+    local dTabStripSep = H.Ln(12,1)       ; dTabStripSep.Color = Theme.Border  ; W._drawings.tabStripSep = dTabStripSep
+
+    -- Ghost logo: body (rounded square), two eyes (circles), three skirt triangles
+    local dGhostBody  = H.Sq(13,true,8)  ; dGhostBody.Color  = Theme.Accent  ; W._drawings.ghostBody  = dGhostBody
+    local dGhostEyeL  = H.Circ(14)       ; dGhostEyeL.Color  = Theme.TopBar  ; dGhostEyeL.NumSides=20 ; dGhostEyeL.Radius=2.5 ; W._drawings.ghostEyeL  = dGhostEyeL
+    local dGhostEyeR  = H.Circ(14)       ; dGhostEyeR.Color  = Theme.TopBar  ; dGhostEyeR.NumSides=20 ; dGhostEyeR.Radius=2.5 ; W._drawings.ghostEyeR  = dGhostEyeR
+    -- Three bottom triangles cut into the skirt (TopBar color to fake cutouts)
+    local dGhostSkL   = Drawing.new("Triangle") ; dGhostSkL.Filled=true ; dGhostSkL.Color=Theme.TopBar ; dGhostSkL.ZIndex=14 ; dGhostSkL.Visible=false ; W._drawings.ghostSkL = dGhostSkL
+    local dGhostSkM   = Drawing.new("Triangle") ; dGhostSkM.Filled=true ; dGhostSkM.Color=Theme.TopBar ; dGhostSkM.ZIndex=14 ; dGhostSkM.Visible=false ; W._drawings.ghostSkM = dGhostSkM
+    local dGhostSkR   = Drawing.new("Triangle") ; dGhostSkR.Filled=true ; dGhostSkR.Color=Theme.TopBar ; dGhostSkR.ZIndex=14 ; dGhostSkR.Visible=false ; W._drawings.ghostSkR = dGhostSkR
+
+    local dPlrBg      = H.Sq(12,true,CR) ; dPlrBg.Color = Theme.TabActive ; W._drawings.plrBg      = dPlrBg
+    local dPlrBgFix   = H.Sq(12,true,0)  ; dPlrBgFix.Color = Theme.TabActive ; W._drawings.plrBgFix   = dPlrBgFix
+    local dPlrBgFixBR = H.Sq(12,true,0)  ; dPlrBgFixBR.Color = Theme.TabActive ; W._drawings.plrBgFixBR = dPlrBgFixBR
+    local dPlrIcon    = H.Sq(13,true,CR)  ; dPlrIcon.Color  = Theme.Accent   ; W._drawings.plrIcon    = dPlrIcon
+    local dPlrInitial = H.Txt(14,12)                ; dPlrInitial.Color = Theme.Text   ; W._drawings.plrInitial = dPlrInitial
+
+    local _userName = tostring(LocalPlayer.Name)
+    local _dispName = _userName
+    pcall(function()
+        local dn = tostring(LocalPlayer.DisplayName)
+        if dn and dn ~= "" and dn ~= "nil" then _dispName = dn end
+    end)
+
+    local dPlrName = H.Txt(13,13) ; dPlrName.Color = Theme.Text    ; W._drawings.plrName = dPlrName
+    local dPlrDisp = H.Txt(13,10) ; dPlrDisp.Color = Theme.SubText ; W._drawings.plrDisp = dPlrDisp
+    -- Spoof button: small square on right side of player card, no text
+    local dPlrSpoof = H.Sq(13,true,CR) ; dPlrSpoof.Color = Theme.MinimizeBtn ; W._drawings.plrSpoof = dPlrSpoof
+    local _plrSpoofed = false
+    local _plrSpoofRect = {pos=H.Vec2(0,0), size=H.Vec2(18,18)}
+
+    dPlrName.Text    = _dispName
+    dPlrDisp.Text    = "@".._userName
+    dPlrInitial.Text = string.upper(string.sub(_dispName, 1, 1))
+
+    local clsR = {pos=H.Vec2(0,0), size=H.Vec2(18,18)}
+    local minR = {pos=H.Vec2(0,0), size=H.Vec2(18,18)}
+
+    W._draw = function()
+        local pos  = W._pos
+        local sz   = W.Size
+
+        _openProg = _openProg + ((W._open and 1 or 0) - _openProg) * 0.07
+        _minProg  = _minProg  + ((W._minimized and 0 or 1) - _minProg) * 0.1
+
+        local fade   = _openProg
+        local isVis  = _openProg > 0.01
+        local bodyH  = (sz.Y - TH - TTH) * _minProg
+        local totalH = TH + TTH + bodyH
+        local vis    = isVis and _minProg > 0.01
+        local btn    = H.Vec2(18,18)
+
+        local function f(d) if d.Visible then d.Transparency = fade end end
+        local function ft(d) if d.Visible then d.Transparency = 1 end end
+
+        dBg.Position  = pos
+        dBg.Size      = H.Vec2(sz.X, totalH)
+        dBg.Corner    = CR
+        dBg.Visible   = isVis; f(dBg)
+
+        dTop.Position = pos; dTop.Size = H.Vec2(sz.X, TH); dTop.Corner = CR; dTop.Visible = isVis; f(dTop)
+        dTopF.Position= pos + H.Vec2(0,TH/2); dTopF.Size = H.Vec2(sz.X,TH/2); dTopF.Visible = isVis; f(dTopF)
+
+        -- Sidebar (only in sidebar mode)
+        if not W._topTabs then
+            dSide.Position = pos + H.Vec2(0,TH); dSide.Size = H.Vec2(SB, bodyH); dSide.Corner = CR; dSide.Visible = vis; f(dSide)
+            dSideTop.Position = pos + H.Vec2(0,TH); dSideTop.Size = H.Vec2(SB, CR*2); dSideTop.Visible = vis; f(dSideTop)
+            dSideB.Position= pos + H.Vec2(SB,TH); dSideB.Size= H.Vec2(1,bodyH); dSideB.Visible= vis; f(dSideB)
+        else
+            dSide.Visible = false; dSideTop.Visible = false; dSideB.Visible = false
+        end
+
+        -- Tab strip (TopTabs mode only)
+        if W._topTabs then
+            dTabStrip.Position = pos + H.Vec2(0, TH)
+            dTabStrip.Size     = H.Vec2(sz.X, TTH)
+            dTabStrip.Visible  = vis; f(dTabStrip)
+            dTabStripSep.From  = pos + H.Vec2(0, TH + TTH)
+            dTabStripSep.To    = pos + H.Vec2(sz.X, TH + TTH)
+            dTabStripSep.Visible = vis; f(dTabStripSep)
+        else
+            dTabStrip.Visible = false; dTabStripSep.Visible = false
+        end
+
+        -- Ghost logo in top-left of topbar
+        local gW, gH = 22, 26
+        local gX = pos.X + P + 2
+        local gY = pos.Y + TH/2 - gH/2
+        dGhostBody.Position = H.Vec2(gX, gY); dGhostBody.Size = H.Vec2(gW, gH)
+        dGhostBody.Color = Theme.Accent; dGhostBody.Visible = isVis; f(dGhostBody)
+        dGhostEyeL.Position = H.Vec2(gX + 6,  gY + 9); dGhostEyeL.Visible = isVis; f(dGhostEyeL)
+        dGhostEyeR.Position = H.Vec2(gX + 16, gY + 9); dGhostEyeR.Visible = isVis; f(dGhostEyeR)
+        local skY = gY + gH; local skH = 6; local skW = gW / 3
+        dGhostSkL.PointA=H.Vec2(gX,         skY-skH); dGhostSkL.PointB=H.Vec2(gX+skW,       skY); dGhostSkL.PointC=H.Vec2(gX,         skY)
+        dGhostSkM.PointA=H.Vec2(gX+skW,     skY);     dGhostSkM.PointB=H.Vec2(gX+skW*1.5,   skY-skH); dGhostSkM.PointC=H.Vec2(gX+skW*2,   skY)
+        dGhostSkR.PointA=H.Vec2(gX+skW*2,   skY);     dGhostSkR.PointB=H.Vec2(gX+gW,        skY-skH); dGhostSkR.PointC=H.Vec2(gX+gW,      skY)
+        dGhostSkL.Visible=isVis; f(dGhostSkL)
+        dGhostSkM.Visible=isVis; f(dGhostSkM)
+        dGhostSkR.Visible=isVis; f(dGhostSkR)
+
+        -- Title: shifted right of ghost
+        local titleX = pos.X + P + gW + 12
+        local titleY = pos.Y + TH/2 - Theme.TitleSize/2
+        dTtl.Position = H.Vec2(titleX, titleY)
+        dTtl.Visible  = isVis; ft(dTtl)
+
+        -- Subtitle: same line as title, slightly smaller, faded
+        if W.Subtitle ~= "" then
+            local titleCharW = Theme.TitleSize * 0.52
+            local titleTextW = #W.Title * titleCharW
+            local subX = titleX + titleTextW + 2
+            local subY = pos.Y + TH/2 - (Theme.TitleSize-2)/2 + 1
+            dSub.Position = H.Vec2(subX, subY)
+            dSub.Visible  = isVis; ft(dSub)
+        else
+            dSub.Visible = false
+        end
+
+        local cPos = pos + H.Vec2(sz.X - btn.X - P, TH/2 - btn.Y/2)
+        clsR.pos = cPos
+        dCls.Position=cPos; dCls.Size=btn; dCls.Visible=isVis; f(dCls)
+        dCX1.From=cPos+H.Vec2(4,4);       dCX1.To=cPos+H.Vec2(btn.X-4,btn.Y-4); dCX1.Visible=isVis; f(dCX1)
+        dCX2.From=cPos+H.Vec2(btn.X-4,4); dCX2.To=cPos+H.Vec2(4,btn.Y-4);       dCX2.Visible=isVis; f(dCX2)
+
+        local mPos = pos + H.Vec2(sz.X - btn.X*2 - P*2, TH/2 - btn.Y/2)
+        minR.pos = mPos
+        dMin.Position=mPos; dMin.Size=btn; dMin.Visible=isVis; f(dMin)
+        -- Double-square restore icon inside button
+        local sqS = 8; local sqOff = 3
+        local bkX = mPos.X + btn.X/2 - sqS/2 + sqOff
+        local bkY = mPos.Y + btn.Y/2 - sqS/2 - sqOff
+        local ftX = mPos.X + btn.X/2 - sqS/2 - sqOff + 1
+        local ftY = mPos.Y + btn.Y/2 - sqS/2 + sqOff - 1
+        dMinSqB.Position=H.Vec2(bkX,bkY); dMinSqB.Size=H.Vec2(sqS,sqS); dMinSqB.Color=Theme.Text; dMinSqB.Corner=1; dMinSqB.Visible=isVis; f(dMinSqB)
+        dMinSqBo.Position=H.Vec2(bkX,bkY); dMinSqBo.Size=H.Vec2(sqS,sqS); dMinSqBo.Color=Theme.MinimizeBtn; dMinSqBo.Corner=1; dMinSqBo.Visible=isVis; f(dMinSqBo)
+        dMinSqF.Position=H.Vec2(ftX,ftY); dMinSqF.Size=H.Vec2(sqS,sqS); dMinSqF.Color=Theme.Text; dMinSqF.Corner=1; dMinSqF.Filled=true; dMinSqF.Visible=isVis; f(dMinSqF)
+
+        dSep.From=pos+H.Vec2(0,TH); dSep.To=pos+H.Vec2(sz.X,TH); dSep.Visible=isVis; f(dSep)
+
+        -- ── Player card ───────────────────────────────────────────────────
+        -- TopTabs mode: compact card embedded in the topbar right side (before window buttons)
+        -- Sidebar mode: bottom of sidebar as before
+        local shownName = _plrSpoofed and "spoofed" or _dispName
+        local shownDisp = _plrSpoofed and "@spoofed" or ("@".._userName)
+        dPlrName.Text    = shownName
+        dPlrDisp.Text    = shownDisp
+        dPlrInitial.Text = string.upper(string.sub(shownName, 1, 1))
+
+        if W._topTabs then
+            -- Compact inline player card: sits between subtitle and window buttons
+            -- icon circle + name, right-aligned before the minimize button
+            local iconSize = 22
+            local cardX    = mPos.X - iconSize - P*2 - 60  -- leave room for name
+            local cardY    = pos.Y + TH/2 - iconSize/2
+            -- player icon
+            dPlrIcon.Position = H.Vec2(cardX, cardY); dPlrIcon.Size = H.Vec2(iconSize, iconSize)
+            dPlrIcon.Visible  = isVis; f(dPlrIcon)
+            dPlrInitial.Position = H.Vec2(cardX + iconSize/2 - 4, cardY + iconSize/2 - 6)
+            dPlrInitial.Visible  = isVis; ft(dPlrInitial)
+            -- name text only (no @handle in compact mode, no bg card)
+            dPlrName.Position = H.Vec2(cardX + iconSize + 5, pos.Y + TH/2 - 7)
+            dPlrName.Visible  = isVis; ft(dPlrName)
+            dPlrDisp.Visible  = false  -- hide handle in compact topbar
+            -- hide the card background panels
+            dPlrBg.Visible = false; dPlrBgFix.Visible = false; dPlrBgFixBR.Visible = false
+            -- spoof button: tiny pill right of the name
+            local spoofX = cardX + iconSize + 5 + 52
+            local spoofY = pos.Y + TH/2 - 9
+            _plrSpoofRect.pos  = H.Vec2(spoofX, spoofY)
+            _plrSpoofRect.size = H.Vec2(16, 16)
+            dPlrSpoof.Position = H.Vec2(spoofX, spoofY); dPlrSpoof.Size = H.Vec2(16, 16)
+            dPlrSpoof.Color    = _plrSpoofed and Theme.Accent or Theme.MinimizeBtn
+            dPlrSpoof.Visible  = isVis; f(dPlrSpoof)
+        else
+            -- Sidebar mode: full card at bottom of sidebar
+            local plrH = 52
+            local plrY = pos.Y + totalH - plrH
+            dPlrBg.Position = pos + H.Vec2(0, totalH - plrH)
+            dPlrBg.Size     = H.Vec2(SB, plrH); dPlrBg.Corner = CR
+            dPlrBg.Visible  = vis; f(dPlrBg)
+            dPlrBgFix.Position = pos + H.Vec2(0, totalH - plrH)
+            dPlrBgFix.Size     = H.Vec2(SB, CR * 2)
+            dPlrBgFix.Visible  = vis; f(dPlrBgFix)
+            dPlrBgFixBR.Position = pos + H.Vec2(SB - CR * 2, totalH - CR * 2)
+            dPlrBgFixBR.Size     = H.Vec2(CR * 2, CR * 2)
+            dPlrBgFixBR.Visible  = vis; f(dPlrBgFixBR)
+
+            local iconSize = 30
+            local iconX = pos.X + P
+            local iconY = plrY + plrH/2 - iconSize/2
+            dPlrIcon.Position = H.Vec2(iconX, iconY); dPlrIcon.Size = H.Vec2(iconSize, iconSize)
+            dPlrIcon.Visible  = vis; f(dPlrIcon)
+            dPlrInitial.Position = H.Vec2(iconX + iconSize/2 - 4, iconY + iconSize/2 - 6)
+            dPlrInitial.Visible  = vis; ft(dPlrInitial)
+
+            local spoofBtnW = 18; local spoofBtnH = 18
+            local spoofBtnX = pos.X + SB - spoofBtnW - P
+            local spoofBtnY = plrY + plrH/2 - spoofBtnH/2
+            _plrSpoofRect.pos  = H.Vec2(spoofBtnX, spoofBtnY)
+            _plrSpoofRect.size = H.Vec2(spoofBtnW, spoofBtnH)
+            dPlrSpoof.Position = H.Vec2(spoofBtnX, spoofBtnY)
+            dPlrSpoof.Size     = H.Vec2(spoofBtnW, spoofBtnH)
+            dPlrSpoof.Color    = _plrSpoofed and Theme.Accent or Theme.MinimizeBtn
+            dPlrSpoof.Visible  = vis; f(dPlrSpoof)
+
+            dPlrName.Position = H.Vec2(iconX + iconSize + 6, iconY + 4)
+            dPlrName.Visible  = vis; ft(dPlrName)
+            dPlrDisp.Position = H.Vec2(iconX + iconSize + 6, iconY + 18)
+            dPlrDisp.Visible  = vis; ft(dPlrDisp)
+        end
+
+        -- ── Tab buttons ───────────────────────────────────────────────────
+        if not W._topTabs then
+            -- Sidebar vertical tabs
+            local tabY = TH + P
+            for _, tab in ipairs(W._tabs) do
+                tab._draw(tabY, vis, fade)
+                tabY = tabY + 38
+            end
+        else
+            -- Horizontal top tabs drawn in tab strip
+            local stripY  = pos.Y + TH
+            local tabPad  = 14   -- horizontal padding inside each tab pill
+            local tabH    = TTH
+            -- measure tab widths
+            local tabWidths = {}
+            local totalTabW = 0
+            for _, tab in ipairs(W._tabs) do
+                local tw = math.max(60, #tab._title * 8 + tabPad * 2)
+                table.insert(tabWidths, tw)
+                totalTabW = totalTabW + tw + 4  -- 4px gap between tabs
+            end
+            -- start x: left-aligned with a small indent after the ghost+title area
+            local titleEndX = pos.X + P + gW + 12 + #W.Title * (Theme.TitleSize * 0.52) + (#W.Subtitle > 0 and #W.Subtitle * ((Theme.TitleSize-2) * 0.52) + 12 or 0) + P
+            local tabStartX = titleEndX + 8
+            local tx = tabStartX
+            for i, tab in ipairs(W._tabs) do
+                tab._draw(tx, stripY, tabWidths[i], tabH, vis, fade)
+                tx = tx + tabWidths[i] + 4
+            end
+        end
+    end
+
+    local dCsbTrack = H.Sq(19,true,3) ; dCsbTrack.Color = Theme.SliderBg ; W._drawings.csbTrack = dCsbTrack
+    local dCsbThumb = H.Sq(20,true,3) ; dCsbThumb.Color = Theme.Accent   ; W._drawings.csbThumb = dCsbThumb
+    W._csbDrag   = false
+    W._csbTrackY = 0
+    W._csbTrackH = 0
+    W._csbTrackX = 0
+
+    W._layout = function()
+        if not W._activeTab then
+            for _, tab in ipairs(W._tabs) do
+                for _, s in ipairs(tab._sections) do s._hide() end
+            end
+            dCsbTrack.Visible=false; dCsbThumb.Visible=false
+            return
+        end
+        if _openProg < 0.01 or _minProg < 0.05 then
+            for _, tab in ipairs(W._tabs) do
+                for _, s in ipairs(tab._sections) do s._hide() end
+            end
+            dCsbTrack.Visible=false; dCsbThumb.Visible=false
+            return
+        end
+
+        local SB_W   = 8
+        local cx     = W._pos.X + SB + P
+        local cy     = W._pos.Y + TH + TTH + P
+        local cw     = W._topTabs and (W.Size.X - P*2 - SB_W - 4) or (W.Size.X - SB - P*2 - SB_W - 4)
+        local bodyH  = (W.Size.Y - TH - TTH) * _minProg
+        local availH = bodyH - P*2
+        local clipTop    = cy
+        local clipBottom = cy + availH
+
+        local T    = W._activeTab
+        T._scroll  = T._scroll or 0
+        local secs = T._sections
+
+        -- Detect if this tab uses paired (two-column) layout
+        local hasPaired = false
+        for _, s in ipairs(secs) do
+            if s._paired then hasPaired = true; break end
+        end
+
+        if hasPaired then
+            -- ── Two-column independent layout ──────────────────────────────
+            -- Split sections into left (odd _pg) and right (even _pg) columns.
+            -- Each pg group contributes one section to each column in order.
+            -- Sections with _paired=false go full-width between column blocks (rare).
+            local hw   = (cw - P) / 2
+            local lx   = cx
+            local rx   = cx + hw + P
+
+            -- Gather paired groups in order, keyed by _pg
+            local pgOrder = {}
+            local pgSeen  = {}
+            local fullSecs = {}  -- non-paired full-width sections
+            local leftMap  = {}  -- pg -> section
+            local rightMap = {}  -- pg -> section
+
+            local i = 1
+            while i <= #secs do
+                local s1 = secs[i]
+                local s2 = secs[i+1]
+                if s1._paired and s2 and s2._paired and s1._pg == s2._pg then
+                    if not pgSeen[s1._pg] then
+                        pgSeen[s1._pg] = true
+                        table.insert(pgOrder, s1._pg)
+                    end
+                    leftMap[s1._pg]  = s1
+                    rightMap[s1._pg] = s2
+                    i = i + 2
+                else
+                    if not s1._paired then
+                        table.insert(fullSecs, {s=s1, after_pg=pgOrder[#pgOrder]})
+                    end
+                    i = i + 1
+                end
+            end
+
+            -- Build independent column item lists
+            -- Each item: {sec=s, y=absoluteY}
+            local leftItems  = {}
+            local rightItems = {}
+
+            -- Measure all sections first
+            for _, pg in ipairs(pgOrder) do
+                local sl = leftMap[pg]
+                local sr = rightMap[pg]
+                if sl then sl._measure(hw) end
+                if sr then sr._measure(hw) end
+            end
+
+            -- Left column Y positions
+            local lY = cy
+            local lTotal = 0
+            for _, pg in ipairs(pgOrder) do
+                local sl = leftMap[pg]
+                if sl then
+                    table.insert(leftItems, {sec=sl, y=lY})
+                    lTotal = lTotal + sl._h + P
+                    lY = lY + sl._h + P
+                end
+            end
+
+            -- Right column Y positions
+            local rY = cy
+            local rTotal = 0
+            for _, pg in ipairs(pgOrder) do
+                local sr = rightMap[pg]
+                if sr then
+                    table.insert(rightItems, {sec=sr, y=rY})
+                    rTotal = rTotal + sr._h + P
+                    rY = rY + sr._h + P
+                end
+            end
+
+            -- Scroll is based on the taller column
+            local totalH  = math.max(lTotal, rTotal)
+            local maxScroll = math.max(0, totalH - availH)
+            T._scroll = math.clamp(T._scroll, 0, maxScroll)
+
+            -- Draw left column
+            for _, item in ipairs(leftItems) do
+                local sy = item.y - T._scroll
+                local inView = (sy + item.sec._h) > clipTop and sy < clipBottom
+                if inView then
+                    item.sec._upd(lx, sy, hw, clipTop, clipBottom)
+                else
+                    item.sec._hide()
+                end
+            end
+
+            -- Draw right column
+            for _, item in ipairs(rightItems) do
+                local sy = item.y - T._scroll
+                local inView = (sy + item.sec._h) > clipTop and sy < clipBottom
+                if inView then
+                    item.sec._upd(rx, sy, hw, clipTop, clipBottom)
+                else
+                    item.sec._hide()
+                end
+            end
+
+            -- Hide inactive tabs
+            for _, tab in ipairs(W._tabs) do
+                if tab ~= T then
+                    for _, s in ipairs(tab._sections) do s._hide() end
+                end
+            end
+
+            -- Scrollbar
+            if maxScroll > 0 then
+                local trackX = W._pos.X + W.Size.X - SB_W - P
+                W._csbTrackX = trackX; W._csbTrackY = clipTop; W._csbTrackH = availH
+                dCsbTrack.Position = H.Vec2(trackX, clipTop)
+                dCsbTrack.Size     = H.Vec2(SB_W, availH)
+                dCsbTrack.Visible  = true
+                dCsbTrack.Transparency = _openProg
+                local thumbH = math.max(20, math.floor(availH * (availH / totalH)))
+                local thumbY = clipTop + math.floor((availH - thumbH) * (T._scroll / maxScroll))
+                dCsbThumb.Position = H.Vec2(trackX, thumbY)
+                dCsbThumb.Size     = H.Vec2(SB_W, thumbH)
+                dCsbThumb.Visible  = true
+                dCsbThumb.Transparency = _openProg
+            else
+                dCsbTrack.Visible = false
+                dCsbThumb.Visible = false
+            end
+
+        else
+            -- ── Single-column layout (unchanged) ───────────────────────────
+            local rowData = {}
+            local rowY    = cy
+            local totalH  = 0
+            local i = 1
+            while i <= #secs do
+                local s1 = secs[i]
+                s1._measure(cw)
+                table.insert(rowData, {s1=s1, y=rowY, h=s1._h})
+                totalH = totalH + s1._h + P
+                rowY   = rowY + s1._h + P
+                i = i + 1
+            end
+
+            local maxScroll = math.max(0, totalH - availH)
+            T._scroll = math.clamp(T._scroll, 0, maxScroll)
+
+            for _, row in ipairs(rowData) do
+                local sy = row.y - T._scroll
+                local inView = (sy + row.h) > clipTop and sy < clipBottom
+                if inView then
+                    row.s1._upd(cx, sy, cw, clipTop, clipBottom)
+                else
+                    row.s1._hide()
+                end
+            end
+
+            for _, tab in ipairs(W._tabs) do
+                if tab ~= T then
+                    for _, s in ipairs(tab._sections) do s._hide() end
+                end
+            end
+
+            if maxScroll > 0 then
+                local trackX = W._pos.X + W.Size.X - SB_W - P
+                W._csbTrackX = trackX; W._csbTrackY = clipTop; W._csbTrackH = availH
+                dCsbTrack.Position = H.Vec2(trackX, clipTop)
+                dCsbTrack.Size     = H.Vec2(SB_W, availH)
+                dCsbTrack.Visible  = true
+                dCsbTrack.Transparency = _openProg
+                local thumbH = math.max(20, math.floor(availH * (availH / totalH)))
+                local thumbY = clipTop + math.floor((availH - thumbH) * (T._scroll / maxScroll))
+                dCsbThumb.Position = H.Vec2(trackX, thumbY)
+                dCsbThumb.Size     = H.Vec2(SB_W, thumbH)
+                dCsbThumb.Visible  = true
+                dCsbThumb.Transparency = _openProg
+            else
+                dCsbTrack.Visible = false
+                dCsbThumb.Visible = false
+            end
+        end
+    end
+
+    W._input = function()
+        local anyChanging = false
+        for _, tab in ipairs(W._tabs) do
+            for _, s in ipairs(tab._sections) do
+                for _, wg in ipairs(s._widgets) do
+                    if wg._changing then anyChanging = true end
+                end
+            end
+        end
+
+        if W.Key and Input.keysDown[W.Key] then
+            if anyChanging then
+                for _, tab in ipairs(W._tabs) do
+                    for _, s in ipairs(tab._sections) do
+                        for _, wg in ipairs(s._widgets) do
+                            if wg._changing then wg._changing = false end
+                        end
+                    end
+                end
+            end
+            W._open = not W._open
+        end
+
+        if not W._open then
+            -- still poll keybinds even when hidden
+            for _, tab in ipairs(W._tabs) do
+                for _, s in ipairs(tab._sections) do
+                    for _, w in ipairs(s._widgets) do
+                        if w._poll then w._poll() end
+                    end
+                end
+            end
+            return
+        end
+
+        if Input.m1Down then
+            if H.InRect(clsR.pos, clsR.size) then W._open = false; return end
+            if H.InRect(minR.pos, minR.size) then W._minimized = not W._minimized; return end
+            if dPlrSpoof.Visible and H.InRect(_plrSpoofRect.pos, _plrSpoofRect.size) then
+                _plrSpoofed = not _plrSpoofed; return
+            end
+
+            if dCsbTrack.Visible and H.InRect(H.Vec2(W._csbTrackX, W._csbTrackY), H.Vec2(10, W._csbTrackH)) then
+                W._csbDrag = true
+                return
+            end
+
+            local dragArea = H.Vec2(W.Size.X - 18*2 - P*3, TH)
+            if H.InRect(W._pos, dragArea) then
+                W._dragging = true
+                W._dragOff  = H.MousePos() - W._pos
+            end
+
+            if not W._minimized then
+                for _, tab in ipairs(W._tabs) do tab._click() end
+            end
+        end
+
+        if Input.m1Up then
+            W._dragging  = false
+            W._csbDrag   = false
+            if not W._minimized and W._activeTab then
+                for _, s in ipairs(W._activeTab._sections) do
+                    for _, w in ipairs(s._widgets) do
+                        if w._release then w._release() end
+                    end
+                end
+            end
+        end
+
+        if W._csbDrag and Input.m1 and W._activeTab then
+            local T = W._activeTab
+            local availH = W.Size.Y - TH - TTH - P*2
+            local totalH = 0
+            for _, s in ipairs(T._sections) do totalH = totalH + s._h + P end
+            local maxScroll = math.max(0, totalH - availH)
+            local pct = math.clamp((H.MousePos().Y - W._csbTrackY) / math.max(1, W._csbTrackH), 0, 1)
+            T._scroll = math.floor(pct * maxScroll + 0.5)
+        end
+
+        if W._dragging and Input.m1 then
+            W._pos = H.MousePos() - W._dragOff
+        end
+
+        if Input.m1 and not W._minimized and W._activeTab then
+            for _, s in ipairs(W._activeTab._sections) do
+                for _, w in ipairs(s._widgets) do
+                    if w._held then w._held() end
+                end
+            end
+        end
+
+        for _, tab in ipairs(W._tabs) do
+            for _, s in ipairs(tab._sections) do
+                for _, w in ipairs(s._widgets) do
+                    if w._poll then w._poll() end
+                end
+            end
+        end
+    end
+
+    spawn(function()
+        while W._running do
+            local ok, err = pcall(function()
+                Input.Poll(W._tracked)
+                W._input()
+                W._draw()
+                W._layout()
+            end)
+            if not ok then print("[MatchaUI Error]", err) end
+            task.wait(0)
+        end
+        for _, d in pairs(W._drawings) do pcall(function() d:Remove() end) end
+        for _, tab in ipairs(W._tabs) do
+            for _, d in pairs(tab._drawings) do pcall(function() d:Remove() end) end
+            for _, s in ipairs(tab._sections) do
+                for _, d in pairs(s._drawings) do pcall(function() d:Remove() end) end
+                for _, w in ipairs(s._widgets) do
+                    for _, d in pairs(w._drawings) do pcall(function() d:Remove() end) end
+                    if w._xd then for _, d in ipairs(w._xd) do pcall(function() d:Remove() end) end end
+                end
+            end
+        end
+    end)
+
+    function W:Toggle(b)
+        if b == nil then self._open = not self._open else self._open = b end
+    end
+    function W:Unload() self._running = false end
+    function W:SetKey(key)
+        self.Key = key
+        if key and not table.find(self._tracked, key) then
+            table.insert(self._tracked, key)
+        end
+    end
+
+    function W:Tab(opts)
+        opts = opts or {}
+        local T = { _title=opts.Title or "Tab", _window=W, _sections={}, _drawings={}, _pc=0 }
+        T._rect = { pos=H.Vec2(0,0), size=H.Vec2(0,0) }
+
+        -- Sidebar mode drawings
+        local dB = H.Sq(12,true,CR) ; dB.Color = Theme.Sidebar ; T._drawings.b = dB
+        local dT = H.Txt(13,16)     ; dT.Color = Theme.SubText ; dT.Text = T._title ; T._drawings.t = dT
+        local dI = H.Sq(13,true,2)  ; dI.Color = Theme.Accent  ; T._drawings.i = dI
+
+        -- TopTabs mode drawings: pill bg + label + active underline bar
+        local dTB  = H.Sq(13,true,CR)  ; dTB.Color = Theme.TabActive ; T._drawings.tb  = dTB   -- pill bg
+        local dTL  = H.Txt(14,13)      ; dTL.Color = Theme.Text      ; dTL.Text = T._title ; T._drawings.tl = dTL  -- label
+        local dTUL = H.Sq(14,true,2)   ; dTUL.Color = Theme.Accent   ; T._drawings.tul = dTUL  -- underline accent bar
+
+        -- T._draw is called with different args depending on mode:
+        --   sidebar:  T._draw(tabY, vis, fade)
+        --   toptabs:  T._draw(tabX, stripY, tabW, tabH, vis, fade)
+        T._draw = function(a, b, c, d, e, ff)
+            if not W._topTabs then
+                -- sidebar call: (tabY, vis, fade)
+                local tabY, vis, fade = a, b, c
+                local wp  = W._pos
+                local ia  = W._activeTab == T
+                local bp  = wp + H.Vec2(P/2, tabY)
+                local bs  = H.Vec2(SB - P, 34)
+                T._rect.pos  = bp; T._rect.size = bs
+                dB.Position = bp; dB.Size = bs
+                dB.Color    = ia and Theme.TabActive or Theme.Sidebar
+                dB.Corner   = CR; dB.Visible = vis
+                if vis then dB.Transparency = fade end
+                dT.Position = bp + H.Vec2(16, (bs.Y - 16) / 2)
+                dT.Color    = ia and Theme.Text or Theme.SubText
+                dT.Visible  = vis
+                dI.Position = bp + H.Vec2(4, (bs.Y - 14) / 2)
+                dI.Size     = H.Vec2(3, 14); dI.Visible = vis and ia
+                if vis and ia then dI.Transparency = fade end
+                -- hide toptabs drawings
+                dTB.Visible=false; dTL.Visible=false; dTUL.Visible=false
+            else
+                -- toptabs call: (tabX, stripY, tabW, tabH, vis, fade)
+                local tabX, stripY, tabW, tabH, vis, fade = a, b, c, d, e, ff
+                local ia = W._activeTab == T
+                -- pill background (only shown when active)
+                local pillH = tabH - 8
+                local pillY = stripY + (tabH - pillH) / 2
+                dTB.Position = H.Vec2(tabX, pillY)
+                dTB.Size     = H.Vec2(tabW, pillH)
+                dTB.Color    = ia and Theme.TabActive or Theme.Sidebar
+                dTB.Corner   = CR; dTB.Visible = vis
+                if vis then dTB.Transparency = fade end
+                -- label centered in pill
+                local lx = tabX + tabW/2 - #T._title * 4
+                local ly = pillY + pillH/2 - 7
+                dTL.Position = H.Vec2(lx, ly)
+                dTL.Color    = ia and Theme.Text or Theme.SubText
+                dTL.Visible  = vis
+                -- active underline bar: 3px tall, full pill width, at bottom of pill
+                dTUL.Position = H.Vec2(tabX + 4, pillY + pillH - 3)
+                dTUL.Size     = H.Vec2(tabW - 8, 3)
+                dTUL.Visible  = vis and ia
+                if vis and ia then dTUL.Transparency = fade end
+                -- store hit rect
+                T._rect.pos  = H.Vec2(tabX, pillY)
+                T._rect.size = H.Vec2(tabW, pillH)
+                -- hide sidebar drawings
+                dB.Visible=false; dT.Visible=false; dI.Visible=false
+            end
+        end
+
+        T._click = function()
+            if H.InRect(T._rect.pos, T._rect.size) then
+                if W._activeTab ~= T then
+                    T._scroll = 0
+                end
+                W._activeTab = T
+                return
+            end
+            if W._activeTab == T then
+                for _, s in ipairs(T._sections) do s._click() end
+            end
+        end
+
+        local function mkSec(so)
+            so = so or {}
+            local S = { _title=so.Title or "", _tab=T, _widgets={}, _drawings={}, _h=0, _paired=false, _pg=nil, _collapsed=so.Collapsed == true }
+
+            local dBs = H.Sq(14)      ; dBs.Color = Theme.Section       ; S._drawings.bs = dBs
+            local dHd = H.Sq(15)      ; dHd.Color = Theme.SectionHeader ; S._drawings.hd = dHd
+            local dHf = H.Sq(15,true,0) ; dHf.Color = Theme.SectionHeader ; S._drawings.hf = dHf
+            local dSt = H.Txt(16,12)  ; dSt.Color = Theme.SubText ; dSt.Text = S._title ; S._drawings.st = dSt
+            -- Collapse toggle button in section header
+            local dCb = Drawing.new("Triangle") ; dCb.Color = Theme.SubText ; dCb.Filled = true ; dCb.Visible = false ; dCb.ZIndex = 16 ; S._drawings.cb = dCb
+            -- Hit rect for collapse button
+            local _cbRect = {pos=H.Vec2(0,0), size=H.Vec2(16,16)}
+
+            S._measure = function(w)
+                local HH = S._title ~= "" and 28 or 0
+                local ip = P
+                if S._collapsed then
+                    S._h = HH
+                else
+                    local th = HH + ip
+                    for _, wg in ipairs(S._widgets) do th = th + wg._h + ip/2 end
+                    th = th + ip/2
+                    S._h = math.max(th, HH > 0 and HH or 50)
+                end
+            end
+
+            S._upd = function(x, y, w, ct, cbot)
+                local HH = S._title ~= "" and 28 or 0
+                local ip = P
+                if S._collapsed then
+                    S._h = HH
+                else
+                    local th = HH + ip
+                    for _, wg in ipairs(S._widgets) do th = th + wg._h + ip/2 end
+                    th = th + ip/2
+                    S._h = math.max(th, HH > 0 and HH or 50)
+                end
+
+                local sTop = ct and math.max(y, ct) or y
+                local sBot = cbot and math.min(y + S._h, cbot) or (y + S._h)
+                local sH   = math.max(0, sBot - sTop)
+                dBs.Position=H.Vec2(x,sTop); dBs.Size=H.Vec2(w,sH); dBs.Corner=CR
+                dBs.Visible=sH>0
+                if dBs.Visible then dBs.Transparency=_openProg end
+
+                if S._title ~= "" then
+                    local hdTop = ct and math.max(y,ct) or y
+                    local hdBot = cbot and math.min(y+HH,cbot) or y+HH
+                    local hdH = math.max(0,hdBot-hdTop)
+                    dHd.Position=H.Vec2(x,hdTop); dHd.Size=H.Vec2(w,hdH); dHd.Corner=CR; dHd.Visible=hdH>0
+                    if dHd.Visible then dHd.Transparency=_openProg end
+                    dHf.Position=H.Vec2(x,y+HH/2); dHf.Size=H.Vec2(w,HH/2); dHf.Visible=H.InClip(y+HH/2,HH/2,ct,cbot)
+                    if dHf.Visible then dHf.Transparency=_openProg end
+                    dSt.Position=H.Vec2(x+ip,y+HH/2-6); dSt.Visible=H.TxtClip(y+HH/2-6,Theme.FontSize,ct,cbot)
+                    -- Collapse button: right side of header
+                    local cbCX = x + w - 10
+                    local cbCY = y + HH/2
+                    _cbRect.pos  = H.Vec2(cbCX - 8, y + 2)
+                    _cbRect.size = H.Vec2(16, HH - 4)
+                    local inView = H.InClip(y, HH, ct, cbot)
+                    if S._collapsed then
+                        -- right-pointing triangle, fixed size
+                        dCb.PointA = H.Vec2(cbCX - 4, cbCY - 4)
+                        dCb.PointB = H.Vec2(cbCX - 4, cbCY + 4)
+                        dCb.PointC = H.Vec2(cbCX + 4, cbCY)
+                    else
+                        -- down-pointing triangle, same size
+                        dCb.PointA = H.Vec2(cbCX - 4, cbCY - 3)
+                        dCb.PointB = H.Vec2(cbCX + 4, cbCY - 3)
+                        dCb.PointC = H.Vec2(cbCX,     cbCY + 4)
+                    end
+                    dCb.Visible = inView
+                    if dCb.Visible then dCb.Transparency = _openProg end
+                else
+                    dHd.Visible=false; dHf.Visible=false; dSt.Visible=false; dCb.Visible=false
+                end
+
+                if not S._collapsed then
+                    local wy = y + HH + ip
+                    for _, wg in ipairs(S._widgets) do
+                        wg._upd(x+ip, wy, w-ip*2, ct, cbot)
+                        wy = wy + wg._h + ip/2
+                    end
+                else
+                    -- hide all widgets when collapsed
+                    for _, wg in ipairs(S._widgets) do
+                        for _, d in pairs(wg._drawings) do pcall(function() d.Visible=false end) end
+                        if wg._xd then for _, d in ipairs(wg._xd) do pcall(function() d.Visible=false end) end end
+                    end
+                end
+            end
+
+            S._hide = function()
+                for _, d in pairs(S._drawings) do pcall(function() d.Visible=false end) end
+                for _, wg in ipairs(S._widgets) do
+                    for _, d in pairs(wg._drawings) do pcall(function() d.Visible=false end) end
+                    if wg._xd then for _, d in ipairs(wg._xd) do pcall(function() d.Visible=false end) end end
+                end
+            end
+
+            S._click = function()
+                -- Check collapse button first
+                if S._title ~= "" and dCb.Visible and H.InRect(_cbRect.pos, _cbRect.size) then
+                    S._collapsed = not S._collapsed
+                    return
+                end
+                if not S._collapsed then
+                    for _, wg in ipairs(S._widgets) do
+                        if wg._click then wg._click() end
+                    end
+                end
+            end
+
+            function S:Label(wo)
+                wo = wo or {}
+                local wg = { _drawings={}, _h=22, _text=wo.Title or "" }
+                local d = H.Txt(17) ; d.Color=Theme.SubText ; d.Text=wg._text ; wg._drawings.d=d
+                wg._upd = function(x,y,w,ct,cb2)
+                    local vis=H.TxtClip(y+3,Theme.FontSize,ct,cb2)
+                    d.Position=H.Vec2(x,y+3); d.Visible=vis
+                    if vis then d.Transparency=_openProg end
+                end
+                wg._click = function() end
+                table.insert(S._widgets, wg)
+                local r={}
+                function r:Get() return wg._text end
+                function r:Set(t) wg._text=t; d.Text=t end
+                return r
+            end
+
+            function S:Button(wo, cb)
+                wo=wo or {}; cb=cb or function() end
+                local wg = { _drawings={}, _h=30, _title=wo.Title or "Button" }
+                local dB=H.Sq(17,true,CR); dB.Color=Theme.TabActive ; wg._drawings.b=dB
+                local dT=H.Txt(18); dT.Color=Theme.Text; dT.Text=wg._title ; wg._drawings.t=dT
+                local dA=Drawing.new("Triangle"); dA.Filled=true; dA.Color=Theme.SubText; dA.ZIndex=18; dA.Visible=false ; wg._drawings.a=dA
+                wg._upd = function(x,y,w,ct,cbot)
+                    local vis=H.InClip(y,26,ct,cbot)
+                    local bTop=ct and math.max(y,ct) or y
+                    local bBot=cbot and math.min(y+26,cbot) or y+26
+                    local bH=math.max(0,bBot-bTop)
+                    dB.Position=H.Vec2(x,bTop); dB.Size=H.Vec2(w,bH); dB.Visible=bH>0
+                    if dB.Visible then dB.Transparency=_openProg end
+                    local tv=H.TxtClip(y+5,Theme.FontSize,ct,cbot)
+                    dT.Position=H.Vec2(x+8,y+5); dT.Visible=tv
+                    -- right-pointing triangle arrow
+                    local ax = x+w-12; local ay = y+13
+                    dA.PointA=H.Vec2(ax-3,ay-4); dA.PointB=H.Vec2(ax-3,ay+4); dA.PointC=H.Vec2(ax+4,ay)
+                    dA.Visible=tv
+                    if tv then dA.Transparency=_openProg end
+                end
+                wg._click = function()
+                    if dB.Visible and H.InRect(dB.Position,dB.Size) then cb() end
+                end
+                table.insert(S._widgets, wg)
+                return wg
+            end
+
+            function S:Toggle(wo, cb)
+                wo=wo or {}; cb=cb or function() end
+                local wg = { _drawings={}, _h=30, _value=wo.Default or false, _title=wo.Title or "Toggle" }
+                local dT=H.Txt(17); dT.Color=Theme.Text; dT.Text=wg._title ; wg._drawings.t=dT
+                local dTr=H.Sq(17,true,9) ; wg._drawings.tr=dTr
+                local dK=H.Circ(18); dK.Color=Color3.fromRGB(255,255,255); dK.NumSides=30; dK.Radius=7 ; wg._drawings.k=dK
+                local dKb=H.Sq(17,true,4); dKb.Color=Theme.TabActive ; wg._drawings.kb=dKb
+                local dKt=H.Txt(18,10);    dKt.Color=Theme.SubText   ; wg._drawings.kt=dKt
+                local _key=wo.Key or nil; local _changing=false; local _changeT=0
+                if _key then table.insert(W._tracked, _key) end
+                local _prog = wg._value and 1 or 0
+                local function lerpColor(a,b,t)
+                    return Color3.new(a.R+(b.R-a.R)*t,a.G+(b.G-a.G)*t,a.B+(b.B-a.B)*t)
+                end
+                wg._upd = function(x,y,w,ct,cbot)
+                    local vis=H.InClip(y,wg._h,ct,cbot)
+                    local tw=36; local th=18
+                    local kbW=36; local kbH=18
+                    local kbX=x+w-tw-kbW-6; local kbY=y+6
+                    local tx=x+w-tw; local ty=y+6
+                    local tTop=ct and math.max(ty,ct) or ty
+                    local tBot=cbot and math.min(ty+th,cbot) or ty+th
+                    local tH=math.max(0,tBot-tTop)
+                    local kbTop=ct and math.max(kbY,ct) or kbY
+                    local kbBot=cbot and math.min(kbY+kbH,cbot) or kbY+kbH
+                    local kbH2=math.max(0,kbBot-kbTop)
+                    local kbVis=vis and kbH2>0
+                    dKb.Position=H.Vec2(kbX,kbTop); dKb.Size=H.Vec2(kbW,kbH2)
+                    dKb.Color=_changing and Theme.Accent or Theme.TabActive
+                    dKb.Corner=4; dKb.Visible=kbVis
+                    local ks=_changing and "..." or (_key and H.KeyName(_key) or "-")
+                    dKt.Text=ks; dKt.Position=H.Vec2(kbX+4,kbY+3)
+                    dKt.Visible=kbVis and H.TxtClip(kbY+3,10,ct,cbot)
+                    local targetProg=wg._value and 1 or 0
+                    _prog=_prog+(targetProg-_prog)*0.04
+                    local kxLeft=tx+1; local kxRight=tx+tw-th+1
+                    local kxAnim=kxLeft+(kxRight-kxLeft)*_prog
+                    local colAnim=lerpColor(Theme.ToggleOff,Theme.ToggleOn,_prog)
+                    local ky=ty+th/2
+                    dT.Position=H.Vec2(x,y+7); dT.Visible=vis and H.TxtClip(y+7,Theme.FontSize,ct,cbot)
+                    dTr.Position=H.Vec2(tx,tTop); dTr.Size=H.Vec2(tw,tH)
+                    dTr.Color=colAnim; dTr.Corner=9; dTr.Visible=vis and tH>0
+                    dK.Position=H.Vec2(kxAnim+th/2-1,ky)
+                    dK.Visible=vis and H.TxtClip(ky-7,14,ct,cbot)
+                end
+                wg._click = function()
+                    if dTr.Visible and H.InRect(dTr.Position,dTr.Size) then
+                        wg._value=not wg._value; cb(wg._value)
+                    end
+                    if dKb.Visible and H.InRect(dKb.Position,dKb.Size) and not _changing then
+                        _changing=true; _changeT=os.clock()
+                    end
+                end
+                wg._poll = function()
+                    if _key and Input.keysDown[_key] then
+                        wg._value=not wg._value; cb(wg._value)
+                    end
+                    if _changing then
+                        if (os.clock()-_changeT)<0.15 then return end
+                        if iskeypressed(0x1B) then _changing=false; _key=nil; return end
+                        for _,k in ipairs(ALL_KEYS) do
+                            if iskeypressed(k) then
+                                _key=k; table.insert(W._tracked,k)
+                                _changing=false; _changeT=os.clock(); return
+                            end
+                        end
+                    end
+                end
+                table.insert(S._widgets, wg)
+                local r={}
+                function r:Get() return wg._value end
+                function r:Set(b) wg._value=b; cb(b) end
+                return r
+            end
+
+            function S:Slider(wo, cb)
+                wo=wo or {}; cb=cb or function() end
+                local wg = { _drawings={}, _h=42, _sliding=false,
+                    _min=wo.Min or 0, _max=wo.Max or 100, _step=wo.Step or 1,
+                    _suffix=wo.Suffix or "", _title=wo.Title or "Slider",
+                    _tp=H.Vec2(0,0), _ts=H.Vec2(0,0)
+                }
+                wg._value = wo.Default or wg._min
+                local dTt=H.Txt(17); dTt.Color=Theme.Text; dTt.Text=wg._title ; wg._drawings.tt=dTt
+                local dTr=H.Sq(17,true,4); dTr.Color=Theme.SliderBg ; wg._drawings.tr=dTr
+                local dFl=H.Sq(18,true,4); dFl.Color=Theme.SliderFill ; wg._drawings.fl=dFl
+                local dVl=H.Txt(19,11); dVl.Color=Theme.Text ; wg._drawings.vl=dVl
+
+                local function calc(mx)
+                    local pct = math.clamp((mx-wg._tp.X)/wg._ts.X, 0, 1)
+                    local raw = wg._min + (wg._max-wg._min)*pct
+                    local st  = math.floor(raw/wg._step+0.5)*wg._step
+                    local fmt = "%."..math.max(0,-math.floor(math.log10(wg._step+0.0001))).."f"
+                    return tonumber(string.format(fmt, math.clamp(st, wg._min, wg._max)))
+                end
+
+                wg._upd = function(x,y,w,ct,cbot)
+                    local tv=H.TxtClip(y+2,Theme.FontSize,ct,cbot)
+                    dTt.Position=H.Vec2(x,y+2); dTt.Visible=tv
+                    
+                    local ty=y+22
+                    wg._tp=H.Vec2(x,ty); wg._ts=H.Vec2(w,12)
+                    local trv=H.InClip(ty,12,ct,cbot)
+                    dTr.Position=H.Vec2(x,ty); dTr.Size=H.Vec2(w,12); dTr.Visible=trv
+                    if trv then dTr.Transparency=_openProg end
+                    local pct=math.clamp((wg._value-wg._min)/(wg._max-wg._min),0,1)
+                    dFl.Position=H.Vec2(x,ty); dFl.Size=H.Vec2(math.max(w*pct,8),12); dFl.Visible=trv
+                    if trv then dFl.Transparency=_openProg end
+                    local vt=tostring(wg._value)..wg._suffix
+                    dVl.Text=vt; dVl.Position=H.Vec2(x+w/2-#vt*3.5,ty); dVl.Visible=trv
+                    
+                end
+                wg._click = function()
+                    if dTr.Visible and H.InRect(wg._tp,wg._ts) then
+                        wg._sliding=true
+                        local v=calc(Mouse.X); if v~=wg._value then wg._value=v; cb(v) end
+                    end
+                end
+                wg._held = function()
+                    if wg._sliding then
+                        local v=calc(Mouse.X); if v~=wg._value then wg._value=v; cb(v) end
+                    end
+                end
+                wg._release = function() wg._sliding=false end
+                table.insert(S._widgets, wg)
+                local r={}
+                function r:Get() return wg._value end
+                function r:Set(n) wg._value=math.clamp(n,wg._min,wg._max); cb(wg._value) end
+                return r
+            end
+
+            function S:Dropdown(wo, cb)
+                wo=wo or {}; cb=cb or function() end
+                local MAX_ROWS = 10
+                local SB_W = 8
+                local wg = { _drawings={}, _h=32, _open=false, _scroll=0, _sbDrag=false, _sbDragY=0,
+                    _title=wo.Title or "Dropdown", _options=wo.Options or {}, _xd={},
+                    _listX=0, _listY=0, _listH=0, _trackX=0, _trackY=0, _trackH=0 }
+                wg._value = wo.Default or wg._options[1]
+                local dB=H.Sq(17,true,CR); dB.Color=Theme.TabActive ; wg._drawings.b=dB
+                local dT=H.Txt(18); dT.Color=Theme.Text ; wg._drawings.t=dT
+                local dA=Drawing.new("Triangle"); dA.Filled=true; dA.Color=Theme.SubText; dA.ZIndex=18; dA.Visible=false ; wg._drawings.a=dA
+                -- List container: filled bg + 4-line border
+                local dLC=H.Sq(19,true,CR); dLC.Color=Theme.Section ; wg._drawings.lc=dLC
+                local dBL=H.Ln(22,1.5); dBL.Color=Theme.Accent ; wg._drawings.bl=dBL
+                local dBR=H.Ln(22,1.5); dBR.Color=Theme.Accent ; wg._drawings.br=dBR
+                local dBT=H.Ln(22,1.5); dBT.Color=Theme.Accent ; wg._drawings.bt=dBT
+                local dBBot=H.Ln(22,1.5); dBBot.Color=Theme.Accent ; wg._drawings.bb=dBBot
+                local dSbTrack=H.Sq(20,true,3); dSbTrack.Color=Theme.SliderBg ; wg._drawings.sbt=dSbTrack
+                local dSbThumb=H.Sq(21,true,3); dSbThumb.Color=Theme.Accent   ; wg._drawings.sbh=dSbThumb
+                local od={}
+                for i=1,MAX_ROWS do
+                    local ob=H.Sq(20,true,CR); ob.Color=Theme.Accent
+                    local ot=H.Txt(21); ot.Color=Theme.Text
+                    table.insert(od,{b=ob,t=ot})
+                    table.insert(wg._xd,ob); table.insert(wg._xd,ot)
+                end
+                wg._upd = function(x,y,w,ct,cb2)
+                    local ns = #wg._options > MAX_ROWS
+                    local visible = math.min(#wg._options, MAX_ROWS)
+                    local rowW = ns and (w - SB_W - 2) or w
+                    wg._h = wg._open and (32 + visible*26 + 4) or 32
+                    local bv=H.InClip(y,28,ct,cb2)
+                    dB.Position=H.Vec2(x,y); dB.Size=H.Vec2(w,28); dB.Visible=bv
+                    if bv then dB.Transparency=_openProg end
+                    local tv=H.TxtClip(y+7,Theme.FontSize,ct,cb2)
+                    dT.Text=wg._title..": "..(wg._value or ""); dT.Position=H.Vec2(x+8,y+7); dT.Visible=tv
+                    -- triangle arrow: down when closed, up when open
+                    local ax=x+w-11; local ay=y+14
+                    if wg._open then
+                        dA.PointA=H.Vec2(ax-4,ay+3); dA.PointB=H.Vec2(ax+4,ay+3); dA.PointC=H.Vec2(ax,ay-3)
+                    else
+                        dA.PointA=H.Vec2(ax-4,ay-3); dA.PointB=H.Vec2(ax+4,ay-3); dA.PointC=H.Vec2(ax,ay+3)
+                    end
+                    dA.Visible=tv
+                    if tv then dA.Transparency=_openProg end
+
+                    local listY = y + 30
+                    local listH = visible * 26
+                    wg._listX=x; wg._listY=listY; wg._listH=listH
+
+                    if wg._open then
+                        local contH = listH + 4
+                        local cTop = ct and math.max(listY, ct) or listY
+                        local cBot = cb2 and math.min(listY+contH, cb2) or listY+contH
+                        local cH = math.max(0, cBot-cTop)
+                        local cx2 = x+w
+                        dLC.Position=H.Vec2(x,cTop); dLC.Size=H.Vec2(w,cH); dLC.Visible=cH>0; dLC.Corner=CR
+                        if dLC.Visible then dLC.Transparency=_openProg end
+                        dBT.From=H.Vec2(x,cTop);      dBT.To=H.Vec2(cx2,cTop);    dBT.Visible=cH>0
+                        dBBot.From=H.Vec2(x,cTop+cH); dBBot.To=H.Vec2(cx2,cTop+cH); dBBot.Visible=cH>0
+                        dBL.From=H.Vec2(x,cTop);      dBL.To=H.Vec2(x,cTop+cH);   dBL.Visible=cH>0
+                        dBR.From=H.Vec2(cx2,cTop);    dBR.To=H.Vec2(cx2,cTop+cH); dBR.Visible=cH>0
+                        if cH>0 then dBT.Transparency=_openProg; dBBot.Transparency=_openProg; dBL.Transparency=_openProg; dBR.Transparency=_openProg end
+                    else
+                        dLC.Visible=false; dBL.Visible=false; dBR.Visible=false; dBT.Visible=false; dBBot.Visible=false
+                    end
+
+                    for i=1,MAX_ROWS do
+                        local o=od[i]; local opt=wg._options[i+wg._scroll]
+                        if wg._open and opt then
+                            local oy = listY + (i-1)*26
+                            local ov=H.InClip(oy,25,ct,cb2)
+                            -- only show bg for selected row
+                            o.b.Position=H.Vec2(x+2,oy); o.b.Size=H.Vec2(w-4,24)
+                            o.b.Color=Theme.Accent; o.b.Visible=(opt==wg._value) and ov or false
+                            o.b.Corner=CR
+                            if o.b.Visible then o.b.Transparency=_openProg end
+                            local otv=H.TxtClip(oy+5,Theme.FontSize,ct,cb2)
+                            o.t.Text=opt; o.t.Position=H.Vec2(x+10,oy+5); o.t.Visible=otv
+                            o.t.Color=(opt==wg._value) and Theme.Text or Theme.SubText
+                        else o.b.Visible=false; o.t.Visible=false end
+                    end
+
+                    if wg._open and ns then
+                        local trackX = x + rowW + 2
+                        local trackH = listH
+                        wg._trackX=trackX; wg._trackY=listY; wg._trackH=trackH
+                        dSbTrack.Position=H.Vec2(trackX, listY); dSbTrack.Size=H.Vec2(SB_W, trackH); dSbTrack.Visible=true
+                        dSbTrack.Transparency=_openProg
+                        local total = #wg._options
+                        local thumbH = math.max(16, math.floor(trackH * (MAX_ROWS / total)))
+                        local maxScroll = total - MAX_ROWS
+                        local thumbY = listY + math.floor((trackH - thumbH) * (wg._scroll / maxScroll))
+                        dSbThumb.Position=H.Vec2(trackX, thumbY); dSbThumb.Size=H.Vec2(SB_W, thumbH); dSbThumb.Visible=true
+                        dSbThumb.Transparency=_openProg
+                    else
+                        dSbTrack.Visible=false; dSbThumb.Visible=false
+                    end
+                end
+                wg._click = function()
+                    if not dB.Visible then return end
+                    if dSbTrack.Visible and H.InRect(H.Vec2(wg._trackX, wg._trackY), H.Vec2(SB_W+2, wg._trackH)) then
+                        wg._sbDrag = true
+                        wg._sbDragY = H.MousePos().Y
+                        return
+                    end
+                    if wg._open then
+                        for i=1,MAX_ROWS do
+                            local o=od[i]
+                            if o.b.Visible and H.InRect(o.b.Position,o.b.Size) then
+                                local opt=wg._options[i+wg._scroll]
+                                if opt then wg._value=opt; wg._open=false; cb(opt); return end
+                            end
+                        end
+                    end
+                    if H.InRect(dB.Position,dB.Size) then wg._open=not wg._open end
+                end
+                wg._held = function()
+                    if wg._sbDrag and #wg._options > MAX_ROWS then
+                        local my = H.MousePos().Y
+                        local maxScroll = #wg._options - MAX_ROWS
+                        local pct = math.clamp((my - wg._trackY) / math.max(1, wg._trackH), 0, 1)
+                        wg._scroll = math.floor(pct * maxScroll + 0.5)
+                    end
+                end
+                wg._release = function()
+                    wg._sbDrag = false
+                end
+                table.insert(S._widgets, wg)
+                local r={}
+                function r:Get() return wg._value end
+                function r:Set(v) if table.find(wg._options,v) then wg._value=v; cb(v) end end
+                return r
+            end
+
+            function S:MultiDropdown(wo, cb)
+                wo=wo or {}; cb=cb or function() end
+                local MAX_ROWS = 10
+                local SB_W = 8
+                local wg = { _drawings={}, _h=32, _open=false, _scroll=0, _sbDrag=false, _sbDragY=0,
+                    _title=wo.Title or "MultiDropdown", _options=wo.Options or {}, _xd={},
+                    _listX=0, _listY=0, _listH=0, _trackX=0, _trackY=0, _trackH=0 }
+                wg._value = wo.Default or {}
+                local dB=H.Sq(17,true,CR); dB.Color=Theme.TabActive ; wg._drawings.b=dB
+                local dT=H.Txt(18); dT.Color=Theme.Text ; wg._drawings.t=dT
+                local dA=Drawing.new("Triangle"); dA.Filled=true; dA.Color=Theme.SubText; dA.ZIndex=18; dA.Visible=false ; wg._drawings.a=dA
+                local dLC=H.Sq(19,true,CR); dLC.Color=Theme.Section ; wg._drawings.lc=dLC
+                local dBL=H.Ln(22,1.5); dBL.Color=Theme.Accent ; wg._drawings.bl=dBL
+                local dBR=H.Ln(22,1.5); dBR.Color=Theme.Accent ; wg._drawings.br=dBR
+                local dBT=H.Ln(22,1.5); dBT.Color=Theme.Accent ; wg._drawings.bt=dBT
+                local dBBot=H.Ln(22,1.5); dBBot.Color=Theme.Accent ; wg._drawings.bb=dBBot
+                local dSbTrack=H.Sq(20,true,3); dSbTrack.Color=Theme.SliderBg ; wg._drawings.sbt=dSbTrack
+                local dSbThumb=H.Sq(21,true,3); dSbThumb.Color=Theme.Accent   ; wg._drawings.sbh=dSbThumb
+                local od={}
+                for i=1,MAX_ROWS do
+                    local ob=H.Sq(20,true,CR); ob.Color=Theme.Section
+                    local ot=H.Txt(21); ot.Color=Theme.Text
+                    local oc=H.Sq(21,true,3)
+                    table.insert(od,{b=ob,t=ot,c=oc})
+                    table.insert(wg._xd,ob); table.insert(wg._xd,ot); table.insert(wg._xd,oc)
+                end
+                wg._upd = function(x,y,w,ct,cb2)
+                    local ns = #wg._options > MAX_ROWS
+                    local visible = math.min(#wg._options, MAX_ROWS)
+                    local rowW = ns and (w - SB_W - 2) or w
+                    wg._h = wg._open and (32 + visible*26 + 4) or 32
+                    local st=#wg._value>0 and table.concat(wg._value,", ") or "None"
+                    local maxChars = math.floor((rowW-60)/7)
+                    if #st > maxChars then st = string.sub(st,1,maxChars-2)..".." end
+                    local bv=H.InClip(y,28,ct,cb2)
+                    dB.Position=H.Vec2(x,y); dB.Size=H.Vec2(w,28); dB.Visible=bv
+                    if bv then dB.Transparency=_openProg end
+                    local tv=H.TxtClip(y+7,Theme.FontSize,ct,cb2)
+                    dT.Text=wg._title..": "..st; dT.Position=H.Vec2(x+8,y+7); dT.Visible=tv
+                    -- triangle arrow: down when closed, up when open
+                    local ax=x+w-11; local ay=y+14
+                    if wg._open then
+                        dA.PointA=H.Vec2(ax-4,ay+3); dA.PointB=H.Vec2(ax+4,ay+3); dA.PointC=H.Vec2(ax,ay-3)
+                    else
+                        dA.PointA=H.Vec2(ax-4,ay-3); dA.PointB=H.Vec2(ax+4,ay-3); dA.PointC=H.Vec2(ax,ay+3)
+                    end
+                    dA.Visible=tv
+                    if tv then dA.Transparency=_openProg end
+
+                    local listY = y + 30
+                    local listH = visible * 26
+                    wg._listX=x; wg._listY=listY; wg._listH=listH
+
+                    if wg._open then
+                        local contH = listH + 4
+                        local cTop = ct and math.max(listY, ct) or listY
+                        local cBot = cb2 and math.min(listY+contH, cb2) or listY+contH
+                        local cH = math.max(0, cBot-cTop)
+                        local cx2 = x+w
+                        dLC.Position=H.Vec2(x,cTop); dLC.Size=H.Vec2(w,cH); dLC.Visible=cH>0; dLC.Corner=CR
+                        if dLC.Visible then dLC.Transparency=_openProg end
+                        dBT.From=H.Vec2(x,cTop);      dBT.To=H.Vec2(cx2,cTop);    dBT.Visible=cH>0
+                        dBBot.From=H.Vec2(x,cTop+cH); dBBot.To=H.Vec2(cx2,cTop+cH); dBBot.Visible=cH>0
+                        dBL.From=H.Vec2(x,cTop);      dBL.To=H.Vec2(x,cTop+cH);   dBL.Visible=cH>0
+                        dBR.From=H.Vec2(cx2,cTop);    dBR.To=H.Vec2(cx2,cTop+cH); dBR.Visible=cH>0
+                        if cH>0 then dBT.Transparency=_openProg; dBBot.Transparency=_openProg; dBL.Transparency=_openProg; dBR.Transparency=_openProg end
+                    else
+                        dLC.Visible=false; dBL.Visible=false; dBR.Visible=false; dBT.Visible=false; dBBot.Visible=false
+                    end
+
+                    for i=1,MAX_ROWS do
+                        local o=od[i]; local opt=wg._options[i+wg._scroll]
+                        local sel=opt and table.find(wg._value,opt)
+                        if wg._open and opt then
+                            local oy = listY + (i-1)*26
+                            local ov=H.InClip(oy,25,ct,cb2)
+                            o.b.Position=H.Vec2(x+2,oy); o.b.Size=H.Vec2(w-4,24)
+                            o.b.Color=Theme.Accent; o.b.Visible=sel and ov or false; o.b.Corner=CR
+                            if o.b.Visible then o.b.Transparency=_openProg end
+                            local otv=H.TxtClip(oy+5,Theme.FontSize,ct,cb2)
+                            o.t.Text=opt; o.t.Position=H.Vec2(x+28,oy+5); o.t.Visible=otv
+                            o.t.Color=sel and Theme.Text or Theme.SubText
+                            o.c.Position=H.Vec2(x+6,oy+6); o.c.Size=H.Vec2(13,13)
+                            o.c.Color=sel and Theme.Accent or Theme.SliderBg; o.c.Corner=3; o.c.Visible=ov
+                            if ov then o.c.Transparency=_openProg end
+                        else o.b.Visible=false; o.t.Visible=false; o.c.Visible=false end
+                    end
+
+                    if wg._open and ns then
+                        local trackX = x + rowW + 2
+                        local trackH = listH
+                        wg._trackX=trackX; wg._trackY=listY; wg._trackH=trackH
+                        dSbTrack.Position=H.Vec2(trackX,listY); dSbTrack.Size=H.Vec2(SB_W,trackH); dSbTrack.Visible=true
+                        dSbTrack.Transparency=_openProg
+                        local total = #wg._options
+                        local thumbH = math.max(16, math.floor(trackH * (MAX_ROWS / total)))
+                        local maxScroll = total - MAX_ROWS
+                        local thumbY = listY + math.floor((trackH - thumbH) * (wg._scroll / maxScroll))
+                        dSbThumb.Position=H.Vec2(trackX,thumbY); dSbThumb.Size=H.Vec2(SB_W,thumbH); dSbThumb.Visible=true
+                        dSbThumb.Transparency=_openProg
+                    else
+                        dSbTrack.Visible=false; dSbThumb.Visible=false
+                    end
+                end
+                wg._click = function()
+                    if not dB.Visible then return end
+                    if dSbTrack.Visible and H.InRect(H.Vec2(wg._trackX,wg._trackY),H.Vec2(SB_W+2,wg._trackH)) then
+                        wg._sbDrag=true; wg._sbDragY=H.MousePos().Y; return
+                    end
+                    if wg._open then
+                        for i=1,MAX_ROWS do
+                            local o=od[i]
+                            if o.b.Visible and H.InRect(o.b.Position,o.b.Size) then
+                                local opt=wg._options[i+wg._scroll]
+                                if opt then
+                                    local idx=table.find(wg._value,opt)
+                                    if idx then table.remove(wg._value,idx) else table.insert(wg._value,opt) end
+                                    cb(wg._value); return
+                                end
+                            end
+                        end
+                    end
+                    if H.InRect(dB.Position,dB.Size) then wg._open=not wg._open end
+                end
+                wg._held = function()
+                    if wg._sbDrag and #wg._options > MAX_ROWS then
+                        local my = H.MousePos().Y
+                        local maxScroll = #wg._options - MAX_ROWS
+                        local pct = math.clamp((my - wg._trackY) / math.max(1, wg._trackH), 0, 1)
+                        wg._scroll = math.floor(pct * maxScroll + 0.5)
+                    end
+                end
+                wg._release = function()
+                    wg._sbDrag = false
+                end
+                table.insert(S._widgets, wg)
+                local r={}
+                function r:Get() return wg._value end
+                function r:Set(t) wg._value=t; cb(t) end
+                function r:Add(o) if table.find(wg._options,o) and not table.find(wg._value,o) then table.insert(wg._value,o); cb(wg._value) end end
+                function r:Remove(o) local i=table.find(wg._value,o); if i then table.remove(wg._value,i); cb(wg._value) end end
+                function r:Toggle(o) if table.find(wg._value,o) then self:Remove(o) else self:Add(o) end end
+                return r
+            end
+
+            function S:Keybind(wo, onPress, onChanged)
+                wo=wo or {}; onPress=onPress or function() end; onChanged=onChanged or function() end
+                local wg = { _drawings={}, _h=30, _key=wo.Key or nil, _changing=false, _changeT=0 }
+                local dTt=H.Txt(17); dTt.Color=Theme.Text; dTt.Text=wo.Title or "Keybind" ; wg._drawings.tt=dTt
+                local dKb=H.Sq(17,true,4); dKb.Color=Theme.TabActive ; wg._drawings.kb=dKb
+                local dKt=H.Txt(18,11); dKt.Color=Theme.Text ; wg._drawings.kt=dKt
+                if wg._key then table.insert(W._tracked, wg._key) end
+                wg._upd = function(x,y,w,ct,cbot)
+                    local tv=H.TxtClip(y+7,Theme.FontSize,ct,cbot)
+                    dTt.Position=H.Vec2(x,y+7); dTt.Visible=tv
+                    
+                    local ks=wg._changing and "..." or H.KeyName(wg._key)
+                    local kw=math.max(44,#ks*8+12)
+                    local kv=H.InClip(y+3,22,ct,cbot)
+                    dKb.Position=H.Vec2(x+w-kw,y+3); dKb.Size=H.Vec2(kw,22); dKb.Visible=kv
+                    if kv then dKb.Transparency=_openProg end
+                    dKt.Text=ks; dKt.Position=H.Vec2(x+w-kw+5,y+8); dKt.Visible=kv
+                    
+                end
+                wg._click = function()
+                    if dKb.Visible and H.InRect(dKb.Position,dKb.Size) then
+                        wg._changing=true; wg._changeT=os.clock()
+                    end
+                end
+                wg._poll = function()
+                    if wg._changing then
+                        if (os.clock()-wg._changeT) < 0.15 then return end
+                        if iskeypressed(0x1B) then wg._changing=false; wg._key=nil; onChanged(nil); return end
+                        for _, k in ipairs(ALL_KEYS) do
+                            if iskeypressed(k) then
+                                wg._changing=false; wg._key=k
+                                table.insert(W._tracked, k)
+                                onChanged(k); return
+                            end
+                        end
+                    else
+                        if wg._key and Input.keysDown[wg._key] then onPress() end
+                    end
+                end
+                table.insert(S._widgets, wg)
+                return wg
+            end
+
+            return S
+        end
+
+        function T:Section(so)
+            local s=mkSec(so); s._paired=false; table.insert(T._sections,s); return s
+        end
+
+        function T:Row(lo, ro)
+            T._pc=T._pc+1; local g=T._pc
+            local sL=mkSec(lo); sL._paired=true; sL._pg=g; table.insert(T._sections,sL)
+            local sR=mkSec(ro); sR._paired=true; sR._pg=g; table.insert(T._sections,sR)
+            return sL, sR
+        end
+
+        if not W._activeTab then W._activeTab=T end
+        table.insert(W._tabs, T)
+        return T
+    end
+
+    return W
+end
