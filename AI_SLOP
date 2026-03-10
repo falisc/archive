@@ -463,22 +463,22 @@ function Menu:Window(opts)
         dTopF.Position=pos+H.V2(0,TBH/2); dTopF.Size=H.V2(sz.X,TBH/2); dTopF.Visible=vis; fa(dTopF)
 
         -- breadcrumb title chain, left-aligned
-        local tx = pos.X + P + 4
-        local ty = pos.Y + TBH/2 - Theme.TitleSize/2
-        local charW = Theme.TitleSize * 0.52
-        dT1.Position=H.V2(tx,ty); dT1.Visible=vis
-        tx = tx + #W._title * charW
-        dTs.Position=H.V2(tx,ty); dTs.Visible=vis
-        tx = tx + 3 * charW
-        dT2.Position=H.V2(tx,ty); dT2.Visible=vis
-        tx = tx + #W._subtitle * charW
-        dTs2.Position=H.V2(tx,ty); dTs2.Visible=vis
-        tx = tx + 3 * charW
-        dTag.Position=H.V2(tx,ty); dTag.Visible=vis
+        local CW  = Theme.TitleSize * 0.60
+        local tx  = pos.X + P + 6
+        local ty  = pos.Y + TBH/2 - Theme.TitleSize/2
+        dT1.Position=H.V2(tx,ty); dT1.Visible=vis; dT1.Transparency=fv
+        tx = tx + #W._title * CW + 2
+        dTs.Position=H.V2(tx,ty); dTs.Visible=vis; dTs.Transparency=fv
+        tx = tx + 3 * CW
+        dT2.Position=H.V2(tx,ty); dT2.Visible=vis; dT2.Transparency=fv
+        tx = tx + #W._subtitle * CW + 2
+        dTs2.Position=H.V2(tx,ty); dTs2.Visible=vis; dTs2.Transparency=fv
+        tx = tx + 3 * CW
+        dTag.Position=H.V2(tx,ty); dTag.Visible=vis; dTag.Transparency=fv
 
         -- username: right-aligned
-        local uw = #W._user * (Theme.FontSize * 0.52)
-        dUser.Position=H.V2(pos.X + sz.X - uw - P - 4, ty + 1); dUser.Visible=vis
+        local uw = #W._user * (Theme.FontSize * 0.60)
+        dUser.Position=H.V2(pos.X + sz.X - uw - P - 6, ty + 1); dUser.Visible=vis; dUser.Transparency=fv
 
         -- main tab bar
         local tabBarY = pos.Y + TBH
@@ -497,7 +497,8 @@ function Menu:Window(opts)
 
         -- vertical center divider
         local divX = pos.X + sz.X/2
-        dColDiv.From=H.V2(divX, ctY+P); dColDiv.To=H.V2(divX, ctY+ctH-P); dColDiv.Visible=vis; fa(dColDiv)
+        dColDiv.From=H.V2(divX, ctY+6); dColDiv.To=H.V2(divX, ctY+ctH-6)
+        dColDiv.Visible=vis; if vis then dColDiv.Transparency=fv end
 
         -- footer
         local ftY = pos.Y + sz.Y - FOOTH
@@ -507,23 +508,28 @@ function Menu:Window(opts)
         -- footer: dot + online
         local fdx = pos.X + P + 4
         local fdy = ftY + FOOTH/2
-        dFtDot.Position=H.V2(fdx, fdy); dFtDot.Visible=vis; fa(dFtDot)
-        dFtOnl.Position=H.V2(fdx+8, ftY + FOOTH/2 - 6); dFtOnl.Visible=vis
-        dFtOnl.Text = opts.Online and (tostring(opts.Online).." online") or ""
+        if opts.Online then
+            dFtDot.Position=H.V2(fdx, fdy); dFtDot.Visible=vis; if vis then dFtDot.Transparency=fv end
+            dFtOnl.Text = tostring(opts.Online).." online"
+            dFtOnl.Position=H.V2(fdx+9, ftY+FOOTH/2-6); dFtOnl.Visible=vis; if vis then dFtOnl.Transparency=fv end
+        else
+            dFtDot.Visible=false; dFtOnl.Visible=false
+        end
 
         -- footer center: discord
         dFtDsc.Text = W._discord
-        local dw = #W._discord * (11*0.52)
+        local dw = #W._discord * (11*0.60)
         dFtDsc.Position=H.V2(pos.X+sz.X/2 - dw/2, ftY+FOOTH/2-6); dFtDsc.Visible=vis
+        if vis then dFtDsc.Transparency=fv end
 
         -- footer right: "built: <date>"
         if W._build ~= "" then
             dFtBld.Text="built: "; dFtBldV.Text=W._build
-            local bw = #"built: " * (11*0.52)
-            local bvw = #W._build * (11*0.52)
+            local bw  = #"built: " * (11*0.60)
+            local bvw = #W._build  * (11*0.60)
             local brx = pos.X + sz.X - P - 4 - bw - bvw
-            dFtBld.Position=H.V2(brx, ftY+FOOTH/2-6); dFtBld.Visible=vis
-            dFtBldV.Position=H.V2(brx+bw, ftY+FOOTH/2-6); dFtBldV.Visible=vis
+            dFtBld.Position=H.V2(brx, ftY+FOOTH/2-6); dFtBld.Visible=vis; if vis then dFtBld.Transparency=fv end
+            dFtBldV.Position=H.V2(brx+bw, ftY+FOOTH/2-6); dFtBldV.Visible=vis; if vis then dFtBldV.Transparency=fv end
         else
             dFtBld.Visible=false; dFtBldV.Visible=false
         end
@@ -567,16 +573,17 @@ function Menu:Window(opts)
 
         local pos  = W._pos
         local sz   = W.Size
-        local SB_W = 7
+        local SB_W = 6
+        local P2   = 14  -- content left/right padding
         local stY  = pos.Y + TBH + TABH + STBH
         local ctH  = sz.Y - TBH - TABH - STBH - FOOTH
         local ctY  = stY
         local availH = ctH - P*2
 
-        local half   = sz.X/2
-        local lx     = pos.X + P
-        local rx     = pos.X + half + P
-        local colW   = half - P*2 - SB_W - 2
+        local half   = sz.X / 2
+        local lx     = pos.X + P2
+        local rx     = pos.X + half + P2
+        local colW   = half - P2 - SB_W - 4
         local clipTop    = ctY + P
         local clipBottom = ctY + ctH - P
 
@@ -843,28 +850,28 @@ function Menu:Window(opts)
             _rect     = {pos=H.V2(0,0), size=H.V2(0,0)},
         }
 
-        -- Measure tab text width
-        T._tabW = #T._title * (Theme.FontSize * 0.60) + 6
+        -- Measure tab text width — SystemBold ~0.62px per char at FontSize
+        T._tabW = #T._title * (Theme.FontSize * 0.62) + 8
 
         -- Tab label drawing
         local dTxt = H.Txt(13, Theme.FontSize); dTxt.Color=Theme.SubText; dTxt.Text=T._title; T._drawings.txt=dTxt; CR(dTxt,"SubText")
-        -- Active underline
+        -- Active underline (2px accent bar flush with bottom of tab bar)
         local dLine= H.Ln(14, 2);               dLine.Color=Theme.Accent;                    T._drawings.line=dLine; CR(dLine,"Accent")
 
         T._draw = function(tabX, tabBarY, tabH, vis, fv)
             local bx = tabX
             local by = tabBarY
             local bw = T._tabW
-            local bh = tabH
             T._rect.pos  = H.V2(bx, by)
-            T._rect.size = H.V2(bw, bh)
+            T._rect.size = H.V2(bw, tabH)
             local isAct  = W._activeTab == T
             dTxt.Position = H.V2(bx, by + tabH/2 - Theme.FontSize/2)
             dTxt.Color    = isAct and Theme.Text or Theme.SubText
             dTxt.Visible  = vis
-            -- underline for active
-            dLine.From    = H.V2(bx, by + tabH - 2)
-            dLine.To      = H.V2(bx + bw, by + tabH - 2)
+            dTxt.Transparency = fv
+            -- underline: sits right at the very bottom edge of the tab bar
+            dLine.From    = H.V2(bx, by + tabH - 1)
+            dLine.To      = H.V2(bx + bw, by + tabH - 1)
             dLine.Visible = vis and isAct
             if dLine.Visible then dLine.Transparency = fv end
         end
@@ -886,7 +893,7 @@ function Menu:Window(opts)
                 _scroll   = 0,
                 _rect     = {pos=H.V2(0,0), size=H.V2(0,0)},
             }
-            S._tabW = #S._title * (Theme.FontSize * 0.60) + 4
+            S._tabW = #S._title * (Theme.FontSize * 0.62) + 6
 
             local dTxt = H.Txt(14, Theme.FontSize); dTxt.Color=Theme.SubText; dTxt.Text=S._title; S._drawings.txt=dTxt; CR(dTxt,"SubText")
             local dLine= H.Ln(15, 2);               dLine.Color=Theme.Accent;                     S._drawings.line=dLine; CR(dLine,"Accent")
@@ -898,8 +905,9 @@ function Menu:Window(opts)
                 dTxt.Position = H.V2(stx, stY + stH/2 - Theme.FontSize/2)
                 dTxt.Color    = isAct and Theme.AccentText or Theme.SubText
                 dTxt.Visible  = vis
-                dLine.From    = H.V2(stx, stY + stH - 2)
-                dLine.To      = H.V2(stx + S._tabW, stY + stH - 2)
+                dTxt.Transparency = fv
+                dLine.From    = H.V2(stx, stY + stH - 1)
+                dLine.To      = H.V2(stx + S._tabW, stY + stH - 1)
                 dLine.Visible = vis and isAct
                 if dLine.Visible then dLine.Transparency = fv end
             end
@@ -917,14 +925,14 @@ function Menu:Window(opts)
                 -- No visual section background for matcha style (widgets stand alone)
                 Sc._measure = function(w)
                     local h = 0
-                    for _, wg in ipairs(Sc._widgets) do h = h + wg._h + 4 end
+                    for _, wg in ipairs(Sc._widgets) do h = h + wg._h + 6 end
                     Sc._h = math.max(h, 0)
                 end
                 Sc._upd = function(x, y, w, ct, cbot)
                     local wy = y
                     for _, wg in ipairs(Sc._widgets) do
                         wg._upd(x, wy, w, ct, cbot)
-                        wy = wy + wg._h + 4
+                        wy = wy + wg._h + 6
                     end
                 end
                 Sc._hide = function()
@@ -964,18 +972,14 @@ function Menu:Window(opts)
                 -- Checkbox: small square + label + optional keybind badge
                 function Sc:Checkbox(wo, cb)
                     wo=wo or {}; cb=cb or function() end
-                    local wg = {_drawings={}, _h=22, _value=wo.Default or false, _title=wo.Title or "Option",
+                    local wg = {_drawings={}, _h=24, _value=wo.Default or false, _title=wo.Title or "Option",
                         _key=wo.Key or nil, _changing=false, _changeT=0}
                     if wg._key then table.insert(W._tracked, wg._key) end
 
-                    -- checkbox box
                     local dBox = H.Sq(17,true,3);  dBox.Color=Theme.CheckboxOff; wg._drawings.box=dBox; CR(dBox,"CheckboxOff")
-                    -- checkmark lines
                     local dCk1 = H.Ln(18,1.5); dCk1.Color=Theme.CheckMark;  wg._drawings.ck1=dCk1; CR(dCk1,"CheckMark")
                     local dCk2 = H.Ln(18,1.5); dCk2.Color=Theme.CheckMark;  wg._drawings.ck2=dCk2; CR(dCk2,"CheckMark")
-                    -- label
-                    local dTxt = H.Txt(17,Theme.FontSize); dTxt.Color=Theme.Text;    wg._drawings.txt=dTxt; CR(dTxt,"Text")
-                    -- keybind badge
+                    local dTxt = H.Txt(17,Theme.FontSize); dTxt.Color=Theme.SubText; dTxt.Text=wg._title; wg._drawings.txt=dTxt; CR(dTxt,"SubText")
                     local dKb  = H.Sq(17,true,3); dKb.Color=Theme.KeybindBg;  wg._drawings.kb=dKb;  CR(dKb,"KeybindBg")
                     local dKt  = H.Txt(18,10);    dKt.Color=Theme.SubText;    wg._drawings.kt=dKt;  CR(dKt,"SubText")
 
@@ -985,28 +989,42 @@ function Menu:Window(opts)
                     wg._upd = function(x,y,w,ct,cbot)
                         _prog = _prog + ((wg._value and 1 or 0) - _prog) * 0.15
                         local vis = H.InClip(y, wg._h, ct, cbot)
-                        local bsz = 13
-                        -- box
-                        dBox.Position=H.V2(x,y+4); dBox.Size=H.V2(bsz,bsz); dBox.Corner=3
+                        local bsz = 14  -- checkbox box size
+                        local by2 = y + (wg._h - bsz) / 2  -- vertically centred
+
+                        -- box colour lerp off→on
                         local lc = Theme.CheckboxOff; local hc = Theme.CheckboxOn
                         dBox.Color=Color3.new(lc.R+(hc.R-lc.R)*_prog, lc.G+(hc.G-lc.G)*_prog, lc.B+(hc.B-lc.B)*_prog)
+                        dBox.Position=H.V2(x, by2); dBox.Size=H.V2(bsz,bsz); dBox.Corner=3
                         dBox.Visible=vis; if vis then dBox.Transparency=_fade end
-                        _cbRect.pos=H.V2(x,y+4); _cbRect.size=H.V2(bsz,bsz)
-                        -- checkmark (tick)
+                        _cbRect.pos=H.V2(x, by2); _cbRect.size=H.V2(bsz,bsz)
+
+                        -- checkmark tick (only when checked)
                         local ck = _prog > 0.5
-                        dCk1.From=H.V2(x+2,y+10); dCk1.To=H.V2(x+5,y+13); dCk1.Visible=vis and ck; if dCk1.Visible then dCk1.Transparency=_fade end
-                        dCk2.From=H.V2(x+5,y+13); dCk2.To=H.V2(x+11,y+6); dCk2.Visible=vis and ck; if dCk2.Visible then dCk2.Transparency=_fade end
-                        -- label
-                        dTxt.Position=H.V2(x+bsz+6, y+4)
-                        dTxt.Color = wg._value and Theme.Text or Theme.SubText
-                        dTxt.Visible=vis and H.TxtClip(y+4,Theme.FontSize,ct,cbot)
-                        if dTxt.Visible then dTxt.Transparency=_fade end
-                        -- keybind badge
-                        local ks = wg._changing and "..." or H.KeyName(wg._key)
-                        local kw = math.max(22, #ks*6+8)
-                        dKb.Position=H.V2(x+w-kw,y+3); dKb.Size=H.V2(kw,16); dKb.Visible=vis
-                        if dKb.Visible then dKb.Transparency=_fade end
-                        dKt.Text=ks; dKt.Position=H.V2(x+w-kw+4,y+5); dKt.Visible=vis
+                        local ckX, ckY = x, by2
+                        dCk1.From=H.V2(ckX+2,ckY+7);  dCk1.To=H.V2(ckX+5,ckY+10)
+                        dCk2.From=H.V2(ckX+5,ckY+10); dCk2.To=H.V2(ckX+11,ckY+4)
+                        dCk1.Visible=vis and ck; if dCk1.Visible then dCk1.Transparency=_fade end
+                        dCk2.Visible=vis and ck; if dCk2.Visible then dCk2.Transparency=_fade end
+
+                        -- label (dimmed when unchecked, white when checked)
+                        local tv = H.TxtClip(y + (wg._h-Theme.FontSize)/2, Theme.FontSize, ct, cbot)
+                        dTxt.Position = H.V2(x + bsz + 7, y + (wg._h-Theme.FontSize)/2)
+                        dTxt.Color    = wg._value and Theme.Text or Theme.SubText
+                        dTxt.Visible  = vis and tv
+                        if dTxt.Visible then dTxt.Transparency = _fade end
+
+                        -- keybind badge: right-aligned, small rounded rect
+                        local ks  = wg._changing and "..." or H.KeyName(wg._key)
+                        local kbH = 18
+                        local kbW = math.max(24, #ks * 6 + 10)
+                        local kbY = y + (wg._h - kbH) / 2
+                        local kv  = H.InClip(kbY, kbH, ct, cbot)
+                        dKb.Position=H.V2(x+w-kbW, kbY); dKb.Size=H.V2(kbW, kbH); dKb.Corner=3
+                        dKb.Color = wg._changing and Theme.Accent or Theme.KeybindBg
+                        dKb.Visible=kv; if kv then dKb.Transparency=_fade end
+                        dKt.Text=ks; dKt.Position=H.V2(x+w-kbW+5, kbY+4)
+                        dKt.Visible=kv; if kv then dKt.Transparency=_fade end
                     end
                     wg._click = function()
                         if dBox.Visible and H.InRect(_cbRect.pos, _cbRect.size) then
@@ -1039,7 +1057,7 @@ function Menu:Window(opts)
                 -- Slider: label left, value right, track below (matcha style)
                 function Sc:Slider(wo, cb)
                     wo=wo or {}; cb=cb or function() end
-                    local wg = {_drawings={}, _h=38, _sliding=false,
+                    local wg = {_drawings={}, _h=42, _sliding=false,
                         _min=wo.Min or 0, _max=wo.Max or 100, _step=wo.Step or 1,
                         _suffix=wo.Suffix or "", _title=wo.Title or "Slider",
                         _tp=H.V2(0,0), _ts=H.V2(0,0),
@@ -1049,10 +1067,10 @@ function Menu:Window(opts)
 
                     local dTtl = H.Txt(17,Theme.FontSize); dTtl.Color=Theme.SubText; dTtl.Text=wg._title; wg._drawings.ttl=dTtl; CR(dTtl,"SubText")
                     local dVal = H.Txt(17,Theme.FontSize); dVal.Color=Theme.Text;                          wg._drawings.val=dVal; CR(dVal,"Text")
-                    local dCur = H.Ln(18,1.5);             dCur.Color=Theme.Accent;                       wg._drawings.cur=dCur; CR(dCur,"Accent")
-                    local dTrk = H.Sq(17,true,2);          dTrk.Color=Theme.SliderTrack;                  wg._drawings.trk=dTrk; CR(dTrk,"SliderTrack")
-                    local dFll = H.Sq(18,true,2);          dFll.Color=Theme.SliderFill;                   wg._drawings.fll=dFll; CR(dFll,"SliderFill")
-                    local dThm = H.Circ(19);               dThm.Color=Theme.SliderThumb; dThm.NumSides=24; dThm.Radius=5; wg._drawings.thm=dThm; CR(dThm,"SliderThumb")
+                    local dCur = H.Ln(18,1);               dCur.Color=Theme.Accent;                       wg._drawings.cur=dCur; CR(dCur,"Accent")
+                    local dTrk = H.Sq(17,true,2); dTrk.Color=Theme.SliderTrack; wg._drawings.trk=dTrk; CR(dTrk,"SliderTrack")
+                    local dFll = H.Sq(18,true,2); dFll.Color=Theme.SliderFill;  wg._drawings.fll=dFll; CR(dFll,"SliderFill")
+                    local dThm = H.Circ(19); dThm.Color=Theme.SliderThumb; dThm.NumSides=24; dThm.Radius=4; wg._drawings.thm=dThm; CR(dThm,"SliderThumb")
 
                     local function clampV(n)
                         local st = math.floor(n/wg._step+0.5)*wg._step
@@ -1063,36 +1081,38 @@ function Menu:Window(opts)
                         return clampV(wg._min + (wg._max-wg._min)*math.clamp((mx-wg._tp.X)/math.max(1,wg._ts.X),0,1))
                     end
 
+                    local TRK_H = 4  -- thin track
+                    local TRK_Y = 22 -- px below widget top
+
                     wg._upd = function(x,y,w,ct,cbot)
                         local vis = H.InClip(y, wg._h, ct, cbot)
-                        -- title
-                        dTtl.Position=H.V2(x,y+2); dTtl.Visible=vis and H.TxtClip(y+2,Theme.FontSize,ct,cbot)
+                        local tv = H.TxtClip(y+2, Theme.FontSize, ct, cbot)
+                        -- title left
+                        dTtl.Position=H.V2(x,y+2); dTtl.Visible=vis and tv
                         if dTtl.Visible then dTtl.Transparency=_fade end
-                        -- value right aligned
+                        -- value right (fixed char width 0.60)
                         local vstr = wg._typing and (wg._typeStr~="" and wg._typeStr or "_") or (tostring(wg._value)..wg._suffix)
-                        local vw   = #vstr*(Theme.FontSize*0.52)
+                        local vw   = #vstr*(Theme.FontSize*0.60)
                         dVal.Text=vstr; dVal.Position=H.V2(x+w-vw,y+2)
                         dVal.Color = wg._typing and Theme.AccentText or Theme.Text
-                        dVal.Visible=vis and H.TxtClip(y+2,Theme.FontSize,ct,cbot)
-                        if dVal.Visible then dVal.Transparency=_fade end
+                        dVal.Visible=vis and tv; if dVal.Visible then dVal.Transparency=_fade end
                         wg._typeRect.pos=H.V2(x+w-vw-4,y); wg._typeRect.size=H.V2(vw+8,18)
-                        -- blinking cursor
+                        -- cursor
                         if wg._typing and math.floor(os.clock()*2)%2==0 then
-                            local cx=x+w-2
-                            dCur.From=H.V2(cx,y+2); dCur.To=H.V2(cx,y+2+Theme.FontSize); dCur.Visible=vis
+                            local cx=x+w+1; dCur.From=H.V2(cx,y+2); dCur.To=H.V2(cx,y+2+Theme.FontSize); dCur.Visible=vis
                         else dCur.Visible=false end
-                        -- track
-                        local ty2=y+20; local th=5
-                        wg._tp=H.V2(x,ty2+th/2-th/2); wg._ts=H.V2(w,th)
-                        local trv=H.InClip(ty2,th+6,ct,cbot)
-                        dTrk.Position=H.V2(x,ty2); dTrk.Size=H.V2(w,th); dTrk.Visible=trv
-                        if trv then dTrk.Transparency=_fade end
+                        -- thin track
+                        local ty2=y+TRK_Y
+                        wg._tp=H.V2(x,ty2); wg._ts=H.V2(w,TRK_H)
+                        local trv=H.InClip(ty2,TRK_H+8,ct,cbot)
+                        dTrk.Position=H.V2(x,ty2); dTrk.Size=H.V2(w,TRK_H); dTrk.Corner=2
+                        dTrk.Visible=trv; if trv then dTrk.Transparency=_fade end
                         local pct=math.clamp((wg._value-wg._min)/math.max(0.001,wg._max-wg._min),0,1)
-                        local fw=math.max(th, w*pct)
-                        dFll.Position=H.V2(x,ty2); dFll.Size=H.V2(fw,th); dFll.Visible=trv
-                        if trv then dFll.Transparency=_fade end
-                        dThm.Radius=5; dThm.Position=H.V2(x+fw,ty2+th/2); dThm.Visible=trv
-                        if trv then dThm.Transparency=_fade end
+                        local fw=math.max(TRK_H,w*pct)
+                        dFll.Position=H.V2(x,ty2); dFll.Size=H.V2(fw,TRK_H); dFll.Corner=2
+                        dFll.Visible=trv; if trv then dFll.Transparency=_fade end
+                        dThm.Radius=4; dThm.Position=H.V2(x+fw,ty2+TRK_H/2)
+                        dThm.Visible=trv; if trv then dThm.Transparency=_fade end
                     end
                     wg._click = function()
                         if dVal.Visible and H.InRect(wg._typeRect.pos, wg._typeRect.size) then
