@@ -16,7 +16,7 @@
         Size     = Vector2.new(750, 560),
         Key      = 0xA1,  -- toggle key (default RightShift)
         Discord  = "matcha.pink/discord",
-        Build    = "Mar 4 2026",
+        Build    = "V1.11",
     })
 
     local Tab = Window:Tab({ Title = "Combat" })
