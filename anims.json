@@ -1,0 +1,627 @@
+[
+  {
+    "AnimationId": "rbxassetid://134852521037165",
+    "Name": "BlockHit",
+    "Parent": "KarateAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://112324027284107",
+    "Name": "GuardbreakEHit",
+    "Parent": "KarateAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://71328060282201",
+    "Name": "1stEHit",
+    "Parent": "KarateAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://90161235331608",
+    "Name": "2ndEHit",
+    "Parent": "KarateAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://92721542799601",
+    "Name": "3rdEHit",
+    "Parent": "KarateAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://128122532583491",
+    "Name": "4thEHit",
+    "Parent": "KarateAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://77957614227468",
+    "Name": "1stM1",
+    "Parent": "KarateAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://105109868069470",
+    "Name": "2ndM1",
+    "Parent": "KarateAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://86918714359440",
+    "Name": "3rdM1",
+    "Parent": "KarateAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://111317285324171",
+    "Name": "4thM1",
+    "Parent": "KarateAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://130884585830171",
+    "Name": "M2",
+    "Parent": "KarateAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://134852521037165",
+    "Name": "BlockHit",
+    "Parent": "BasicAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://76237453354893",
+    "Name": "GuardbreakEHit",
+    "Parent": "BasicAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://71328060282201",
+    "Name": "1stEHit",
+    "Parent": "BasicAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://92721542799601",
+    "Name": "2ndEHit",
+    "Parent": "BasicAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://110944743758456",
+    "Name": "3rdEHit",
+    "Parent": "BasicAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://90161235331608",
+    "Name": "4thEHit",
+    "Parent": "BasicAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://95267170062803",
+    "Name": "1stM1",
+    "Parent": "BasicAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://95363684987743",
+    "Name": "2ndM1",
+    "Parent": "BasicAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://139875456638239",
+    "Name": "3rdM1",
+    "Parent": "BasicAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://133112087379005",
+    "Name": "4thM1",
+    "Parent": "BasicAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://128479795877497",
+    "Name": "M2",
+    "Parent": "BasicAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://134852521037165",
+    "Name": "BlockHit",
+    "Parent": "WrestlingAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://76237453354893",
+    "Name": "GuardbreakEHit",
+    "Parent": "WrestlingAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://92721542799601",
+    "Name": "1stEHit",
+    "Parent": "WrestlingAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://114022632969886",
+    "Name": "2ndEHit",
+    "Parent": "WrestlingAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://92721542799601",
+    "Name": "3rdEHit",
+    "Parent": "WrestlingAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://73180081197317",
+    "Name": "4thEHit",
+    "Parent": "WrestlingAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://132763223227151",
+    "Name": "Block",
+    "Parent": "WrestlingAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://103849336431154",
+    "Name": "4thM1",
+    "Parent": "WrestlingAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://134616225320869",
+    "Name": "M2",
+    "Parent": "WrestlingAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://75644992544295",
+    "Name": "M2EHit",
+    "Parent": "WrestlingAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://132178222366446",
+    "Name": "1stM1",
+    "Parent": "WrestlingAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://128114472490928",
+    "Name": "2ndM1",
+    "Parent": "WrestlingAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://138624221040888",
+    "Name": "3rdM1",
+    "Parent": "WrestlingAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://121770461688707",
+    "Name": "M2Success",
+    "Parent": "WrestlingAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://84132789609149",
+    "Name": "GuardbreakEHit",
+    "Parent": "MuayThaiAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://71328060282201",
+    "Name": "1stEHit",
+    "Parent": "MuayThaiAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://73180081197317",
+    "Name": "2ndEHit",
+    "Parent": "MuayThaiAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://110944743758456",
+    "Name": "3rdEHit",
+    "Parent": "MuayThaiAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://114428811318993",
+    "Name": "4thEHit",
+    "Parent": "MuayThaiAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://81002138566225",
+    "Name": "M2",
+    "Parent": "MuayThaiAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://138017825490326",
+    "Name": "BlockHit",
+    "Parent": "MuayThaiAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://75692393601509",
+    "Name": "4thM1",
+    "Parent": "MuayThaiAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://73865503612362",
+    "Name": "3rdM1",
+    "Parent": "MuayThaiAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://140530278540076",
+    "Name": "2ndM1",
+    "Parent": "MuayThaiAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://87171697393871",
+    "Name": "1stM1",
+    "Parent": "MuayThaiAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://114428811318993",
+    "Name": "EHit",
+    "Parent": "Grappling"
+  },
+  {
+    "AnimationId": "rbxassetid://102978532698651",
+    "Name": "DirtyAttacker",
+    "Parent": "Grappling"
+  },
+  {
+    "AnimationId": "rbxassetid://71749601858824",
+    "Name": "DirtyVictim",
+    "Parent": "Grappling"
+  },
+  {
+    "AnimationId": "rbxassetid://90161235331608",
+    "Name": "DirtyEHit",
+    "Parent": "Grappling"
+  },
+  {
+    "AnimationId": "rbxassetid://134852521037165",
+    "Name": "BlockHit",
+    "Parent": "BoxingAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://84132789609149",
+    "Name": "GuardbreakEHit",
+    "Parent": "BoxingAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://71328060282201",
+    "Name": "1stEHit",
+    "Parent": "BoxingAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://92721542799601",
+    "Name": "2ndEHit",
+    "Parent": "BoxingAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://112324027284107",
+    "Name": "3rdEHit",
+    "Parent": "BoxingAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://90161235331608",
+    "Name": "4thEHit",
+    "Parent": "BoxingAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://73977397773505",
+    "Name": "1stM1",
+    "Parent": "BoxingAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://140559915903523",
+    "Name": "2ndM1",
+    "Parent": "BoxingAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://82475370801539",
+    "Name": "3rdM1",
+    "Parent": "BoxingAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://82164598010704",
+    "Name": "4thM1",
+    "Parent": "BoxingAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://103379337847201",
+    "Name": "M2",
+    "Parent": "BoxingAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://76143419310137",
+    "Name": "BlockHit",
+    "Parent": "HakariAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://84132789609149",
+    "Name": "GuardbreakEHit",
+    "Parent": "HakariAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://71328060282201",
+    "Name": "1stEHit",
+    "Parent": "HakariAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://76237453354893",
+    "Name": "2ndEHit",
+    "Parent": "HakariAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://110944743758456",
+    "Name": "3rdEHit",
+    "Parent": "HakariAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://90161235331608",
+    "Name": "4thEHit",
+    "Parent": "HakariAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://103814914375577",
+    "Name": "MomentumM2",
+    "Parent": "HakariAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://95359912376713",
+    "Name": "1stM1",
+    "Parent": "HakariAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://127631232991111",
+    "Name": "2ndM1",
+    "Parent": "HakariAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://71447243477669",
+    "Name": "3rdM1",
+    "Parent": "HakariAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://73898520591442",
+    "Name": "4thM1",
+    "Parent": "HakariAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://137330597899886",
+    "Name": "M2",
+    "Parent": "HakariAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://76143419310137",
+    "Name": "BlockHit",
+    "Parent": "HakariOtherAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://84132789609149",
+    "Name": "GuardbreakEHit",
+    "Parent": "HakariOtherAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://71328060282201",
+    "Name": "1stEHit",
+    "Parent": "HakariOtherAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://76237453354893",
+    "Name": "2ndEHit",
+    "Parent": "HakariOtherAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://110944743758456",
+    "Name": "3rdEHit",
+    "Parent": "HakariOtherAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://90161235331608",
+    "Name": "4thEHit",
+    "Parent": "HakariOtherAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://82516160136439",
+    "Name": "1stM1",
+    "Parent": "HakariOtherAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://110796329013101",
+    "Name": "2ndM1",
+    "Parent": "HakariOtherAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://95399554089638",
+    "Name": "3rdM1",
+    "Parent": "HakariOtherAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://79161155390140",
+    "Name": "4thM1",
+    "Parent": "HakariOtherAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://103814914375577",
+    "Name": "MomentumM2",
+    "Parent": "HakariOtherAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://74345026218889",
+    "Name": "M2",
+    "Parent": "HakariOtherAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://103814914375577",
+    "Name": "MomentumM2",
+    "Parent": "HakariOtherAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://103814914375577",
+    "Name": "MomentumM2",
+    "Parent": "HakariOtherAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://103814914375577",
+    "Name": "MomentumM2",
+    "Parent": "HakariOtherAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://103814914375577",
+    "Name": "MomentumM2",
+    "Parent": "HakariOtherAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://103814914375577",
+    "Name": "MomentumM2",
+    "Parent": "HakariOtherAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://103814914375577",
+    "Name": "MomentumM2",
+    "Parent": "HakariOtherAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://134852521037165",
+    "Name": "BlockHit",
+    "Parent": "CapoeiraAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://84132789609149",
+    "Name": "GuardbreakEHit",
+    "Parent": "CapoeiraAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://71328060282201",
+    "Name": "1stEHit",
+    "Parent": "CapoeiraAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://73180081197317",
+    "Name": "2ndEHit",
+    "Parent": "CapoeiraAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://110944743758456",
+    "Name": "3rdEHit",
+    "Parent": "CapoeiraAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://114428811318993",
+    "Name": "4thEHit",
+    "Parent": "CapoeiraAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://97280263199117",
+    "Name": "1stM1",
+    "Parent": "CapoeiraAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://136563726541554",
+    "Name": "2ndM1",
+    "Parent": "CapoeiraAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://127253080182564",
+    "Name": "3rdM1",
+    "Parent": "CapoeiraAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://85098647244472",
+    "Name": "4thM1",
+    "Parent": "CapoeiraAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://114254289386168",
+    "Name": "M2",
+    "Parent": "CapoeiraAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://134852521037165",
+    "Name": "BlockHit",
+    "Parent": "SluggerAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://112324027284107",
+    "Name": "GuardbreakEHit",
+    "Parent": "SluggerAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://71328060282201",
+    "Name": "1stEHit",
+    "Parent": "SluggerAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://90161235331608",
+    "Name": "2ndEHit",
+    "Parent": "SluggerAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://92721542799601",
+    "Name": "3rdEHit",
+    "Parent": "SluggerAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://128122532583491",
+    "Name": "4thEHit",
+    "Parent": "SluggerAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://135304344348112",
+    "Name": "1stM1",
+    "Parent": "SluggerAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://136278929175728",
+    "Name": "2ndM1",
+    "Parent": "SluggerAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://73329541283787",
+    "Name": "3rdM1",
+    "Parent": "SluggerAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://83785650808219",
+    "Name": "4thM1",
+    "Parent": "SluggerAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://116328113967477",
+    "Name": "M2",
+    "Parent": "SluggerAnims"
+  },
+  {
+    "AnimationId": "rbxassetid://134852521037165",
+    "Name": "BlockHit",
+    "Parent": "BaseCombat"
+  },
+  {
+    "AnimationId": "rbxassetid://89985804943092",
+    "Name": "M2",
+    "Parent": "BaseCombat"
+  },
+  {
+    "AnimationId": "rbxassetid://84132789609149",
+    "Name": "GuardbreakEHit",
+    "Parent": "BaseCombat"
+  },
+  {
+    "AnimationId": "rbxassetid://71328060282201",
+    "Name": "1stEHit",
+    "Parent": "BaseCombat"
+  },
+  {
+    "AnimationId": "rbxassetid://92721542799601",
+    "Name": "2ndEHit",
+    "Parent": "BaseCombat"
+  },
+  {
+    "AnimationId": "rbxassetid://110944743758456",
+    "Name": "3rdEHit",
+    "Parent": "BaseCombat"
+  },
+  {
+    "AnimationId": "rbxassetid://114428811318993",
+    "Name": "4thEHit",
+    "Parent": "BaseCombat"
+  },
+  {
+    "AnimationId": "rbxassetid://134707728784991",
+    "Name": "1stM1",
+    "Parent": "BaseCombat"
+  },
+  {
+    "AnimationId": "rbxassetid://113403744416180",
+    "Name": "2ndM1",
+    "Parent": "BaseCombat"
+  },
+  {
+    "AnimationId": "rbxassetid://112448114445008",
+    "Name": "3rdM1",
+    "Parent": "BaseCombat"
+  },
+  {
+    "AnimationId": "rbxassetid://84015695249789",
+    "Name": "4thM1",
+    "Parent": "BaseCombat"
+  }
+]
