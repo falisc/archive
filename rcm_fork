@@ -21,24 +21,62 @@ function library:Window(props)
         pageOpen = {},
         lastInputTime = 0,
         inputCooldown = 0.15,
-        toggleKey = props.ToggleKey or props.toggleKey or "F1"
+        toggleKey = props.ToggleKey or props.toggleKey or "F1",
+        configName = props.ConfigName or props.configName,
+        initialized = false
     }
     
-    for i = 1, 20 do
-        window.pageOpen[i] = false
+    for i = 1, 20 do window.pageOpen[i] = false end
+    
+    function window:SaveConfig()
+        if not self.configName then return end
+        local configData = {}
+        for _, page in ipairs(self.pages) do
+            configData[page.name] = {}
+            for _, section in ipairs(page.sections) do
+                configData[page.name][section.name] = {}
+                for _, item in ipairs(section.items) do
+                    if item.type == "toggle" or item.type == "slider" then
+                        configData[page.name][section.name][item.name] = item.value
+                    end
+                end
+            end
+        end
+        writefile(self.configName .. ".json", crypt.json.encode(configData))
+    end
+
+    function window:LoadConfig()
+        if not self.configName then return end
+        local path = self.configName .. ".json"
+        if isfile(path) then
+            local success, result = pcall(function() return crypt.json.decode(readfile(path)) end)
+            if success and type(result) == "table" then
+                for _, page in ipairs(self.pages) do
+                    if result[page.name] then
+                        for _, section in ipairs(page.sections) do
+                            if result[page.name][section.name] then
+                                for _, item in ipairs(section.items) do
+                                    local savedValue = result[page.name][section.name][item.name]
+                                    if savedValue ~= nil then
+                                        item.value = savedValue
+                                        if item.callback then item.callback(item.value) end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+            end
+        else
+            self:SaveConfig()
+        end
     end
     
     function window:getPressedKey()
         local key = getpressedkey()
-        if key and key ~= "None" then
-            return key
-        end
-        
+        if key and key ~= "None" then return key end
         local keys = getpressedkeys()
-        if keys and #keys > 0 then
-            return keys[1]
-        end
-        
+        if keys and #keys > 0 then return keys[1] end
         return nil
     end
     
@@ -47,9 +85,7 @@ function library:Window(props)
         for pageIndex, page in ipairs(self.pages) do
             count = count + 1
             if self.pageOpen[pageIndex] then
-                for _, section in ipairs(page.sections) do
-                    count = count + #section.items
-                end
+                for _, section in ipairs(page.sections) do count = count + #section.items end
             end
         end
         return count
@@ -59,17 +95,12 @@ function library:Window(props)
         local current = 0
         for pageIndex, page in ipairs(self.pages) do
             current = current + 1
-            if current == self.selectedIndex then
-                return {type = "page", data = page, index = pageIndex}
-            end
-            
+            if current == self.selectedIndex then return {type = "page", data = page, index = pageIndex} end
             if self.pageOpen[pageIndex] then
                 for sectionIndex, section in ipairs(page.sections) do
                     for itemIndex, item in ipairs(section.items) do
                         current = current + 1
-                        if current == self.selectedIndex then
-                            return {type = "item", data = item, pageIndex = pageIndex, sectionIndex = sectionIndex, itemIndex = itemIndex}
-                        end
+                        if current == self.selectedIndex then return {type = "item", data = item, pageIndex = pageIndex, sectionIndex = sectionIndex, itemIndex = itemIndex} end
                     end
                 end
             end
@@ -77,66 +108,43 @@ function library:Window(props)
         return nil
     end
     
-    function window:drawWindow()
-        if not self.enabled then return 0 end
+    function window:draw()
+        if not self.enabled then return end
         local startX = self.position.x
         local startY = self.position.y
         
-        local totalHeight = 19
+        -- Draw Window Background
+        local totalHeight = 23
         for pageIndex, page in ipairs(self.pages) do
             totalHeight = totalHeight + 17
             if self.pageOpen[pageIndex] then
                 for _, section in ipairs(page.sections) do
-                    totalHeight = totalHeight + 17
-                    totalHeight = totalHeight + (#section.items * 17)
+                    totalHeight = totalHeight + 17 + (#section.items * 17)
                 end
             end
         end
-        totalHeight = totalHeight + 4
         
         DrawingImmediate.FilledRectangle(vector.create(startX, startY), vector.create(280, totalHeight), shared.theme.inline, 1)
         DrawingImmediate.FilledRectangle(vector.create(startX + 1, startY + 3), vector.create(278, totalHeight - 4), shared.theme.dark, 1)
         DrawingImmediate.FilledRectangle(vector.create(startX, startY), vector.create(280, 2), shared.theme.accent, 1)
         DrawingImmediate.Text(vector.create(startX + 140, startY + 5), 13, shared.theme.text, 1, props.Name or "Window", true, "Proggy")
         
-        return totalHeight
-    end
-    
-    function window:drawContent(startX, startY)
+        -- Draw Content
         local currentY = startY + 23
         local currentIndex = 0
-        
         for pageIndex, page in ipairs(self.pages) do
             currentIndex = currentIndex + 1
-            local isPageSelected = (self.selectedIndex == currentIndex)
-            local pageOpen = self.pageOpen[pageIndex]
-            
-            local pageText = (pageOpen and "[-] " or "[+] ") .. page.name
-            DrawingImmediate.Text(vector.create(startX + 5, currentY + 3), 13, isPageSelected and shared.theme.accent or shared.theme.text, 1, pageText, false, "Proggy")
+            local isSelected = (self.selectedIndex == currentIndex)
+            DrawingImmediate.Text(vector.create(startX + 5, currentY + 3), 13, isSelected and shared.theme.accent or shared.theme.text, 1, (self.pageOpen[pageIndex] and "[-] " or "[+] ") .. page.name, false, "Proggy")
             currentY = currentY + 17
-            
-            if pageOpen then
-                for sectionIndex, section in ipairs(page.sections) do
+            if self.pageOpen[pageIndex] then
+                for _, section in ipairs(page.sections) do
                     DrawingImmediate.Text(vector.create(startX + 22, currentY + 3), 13, shared.theme.section, 1, "[" .. section.name .. "]", false, "Proggy")
                     currentY = currentY + 17
-                    
-                    for itemIndex, item in ipairs(section.items) do
+                    for _, item in ipairs(section.items) do
                         currentIndex = currentIndex + 1
-                        local isItemSelected = (self.selectedIndex == currentIndex)
-                        
-                        local itemText
-                        if item.type == "toggle" then
-                            itemText = item.name .. " -> " .. (item.value and "ON" or "OFF")
-                        elseif item.type == "slider" then
-                            itemText = item.name .. " -> <" .. math.floor(item.value) .. "/" .. item.max .. ">"
-                        elseif item.type == "button" then
-                            itemText = item.name
-                            if item.comment and item.comment ~= "" then
-                                itemText = itemText .. " " .. item.comment
-                            end
-                        end
-                        
-                        DrawingImmediate.Text(vector.create(startX + 22, currentY + 3), 13, isItemSelected and shared.theme.accent or shared.theme.text, 1, itemText, false, "Proggy")
+                        local text = item.name .. (item.type == "toggle" and (" -> " .. (item.value and "ON" or "OFF")) or (item.type == "slider" and (" -> <" .. math.floor(item.value) .. "/" .. item.max .. ">") or ""))
+                        DrawingImmediate.Text(vector.create(startX + 22, currentY + 3), 13, (self.selectedIndex == currentIndex) and shared.theme.accent or shared.theme.text, 1, text, false, "Proggy")
                         currentY = currentY + 17
                     end
                 end
@@ -144,145 +152,62 @@ function library:Window(props)
         end
     end
     
-    function window:draw()
-        if not self.enabled then return end
-        local startX = self.position.x
-        local startY = self.position.y
-        local totalHeight = self:drawWindow()
-        self:drawContent(startX, startY)
-    end
-    
     function window:handleInput()
         local currentTime = tick()
-        if currentTime - self.lastInputTime < self.inputCooldown then
-            return
-        end
-        
+        if currentTime - self.lastInputTime < self.inputCooldown then return end
         local pressedKey = self:getPressedKey()
         if not pressedKey then return end
-        
         self.lastInputTime = currentTime
         
-        if pressedKey == self.toggleKey then
-            self.enabled = not self.enabled
-           return
-      end
-        
+        if pressedKey == self.toggleKey then self.enabled = not self.enabled return end
         if not self.enabled then return end
         
-        local totalItems = self:countTotalItems()
         local currentItem = self:getCurrentItem()
-        
-        if pressedKey == "UpArrow" then
-            if self.selectedIndex > 1 then
-                self.selectedIndex = self.selectedIndex - 1
-            end
-        elseif pressedKey == "DownArrow" then
-            if self.selectedIndex < totalItems then
-                self.selectedIndex = self.selectedIndex + 1
-            end
-        elseif pressedKey == "LeftArrow" then
-            if currentItem and currentItem.type == "item" and currentItem.data.type == "slider" then
-                local change = -1
-                currentItem.data.value = math.clamp(currentItem.data.value + change, currentItem.data.min, currentItem.data.max)
-                if currentItem.data.callback then
-                    currentItem.data.callback(currentItem.data.value)
-                end
-            end
-        elseif pressedKey == "RightArrow" then
-            if currentItem and currentItem.type == "item" and currentItem.data.type == "slider" then
-                local change = 1
-                currentItem.data.value = math.clamp(currentItem.data.value + change, currentItem.data.min, currentItem.data.max)
-                if currentItem.data.callback then
-                    currentItem.data.callback(currentItem.data.value)
-                end
-            end
-        elseif pressedKey == "Enter" then
-            if currentItem then
-                if currentItem.type == "page" then
-                    self.pageOpen[currentItem.index] = not self.pageOpen[currentItem.index]
-                elseif currentItem.type == "item" then
-                    if currentItem.data.type == "toggle" then
-                        currentItem.data.value = not currentItem.data.value
-                        if currentItem.data.callback then
-                            currentItem.data.callback(currentItem.data.value)
-                        end
-                    elseif currentItem.data.type == "button" then
-                        if currentItem.data.callback then
-                            currentItem.data.callback(true)
-                        end
-                    end
-                end
+        if pressedKey == "UpArrow" and self.selectedIndex > 1 then self.selectedIndex = self.selectedIndex - 1
+        elseif pressedKey == "DownArrow" and self.selectedIndex < self:countTotalItems() then self.selectedIndex = self.selectedIndex + 1
+        elseif (pressedKey == "LeftArrow" or pressedKey == "RightArrow") and currentItem and currentItem.type == "item" and currentItem.data.type == "slider" then
+            local change = (pressedKey == "LeftArrow" and -1 or 1)
+            currentItem.data.value = math.clamp(currentItem.data.value + change, currentItem.data.min, currentItem.data.max)
+            if currentItem.data.callback then currentItem.data.callback(currentItem.data.value) end
+            self:SaveConfig()
+        elseif pressedKey == "Enter" and currentItem then
+            if currentItem.type == "page" then self.pageOpen[currentItem.index] = not self.pageOpen[currentItem.index]
+            elseif currentItem.type == "item" then
+                if currentItem.data.type == "toggle" then
+                    currentItem.data.value = not currentItem.data.value
+                    if currentItem.data.callback then currentItem.data.callback(currentItem.data.value) end
+                    self:SaveConfig()
+                elseif currentItem.data.callback then currentItem.data.callback(true) end
             end
         end
     end
     
     function window:Page(props)
-        local page = {
-            name = props.Name or "Page",
-            sections = {}
-        }
-        
+        local page = {name = props.Name or "Page", sections = {}}
         function page:Section(props)
-            local section = {
-                name = props.Name or "Section",
-                items = {}
-            }
-            
+            local section = {name = props.Name or "Section", items = {}}
             function section:Toggle(props)
-                local toggle = {
-                    type = "toggle",
-                    name = props.Name or "Toggle",
-                    value = props.Default or false,
-                    min = props.Min or 0,
-                    max = props.Max or 1,
-                    callback = props.Callback or props.callback or function() end
-                }
-                
-                table.insert(section.items, toggle)
-                return toggle
+                local t = {type="toggle", name=props.Name, value=props.Default or false, callback=props.Callback or function()end}
+                table.insert(section.items, t) return t
             end
-            
             function section:Slider(props)
-                local slider = {
-                    type = "slider",
-                    name = props.Name or "Slider",
-                    value = props.Default or 0,
-                    min = props.Min or 0,
-                    max = props.Max or 100,
-                    callback = props.Callback or props.callback or function() end
-                }
-                
-                table.insert(section.items, slider)
-                return slider
+                local s = {type="slider", name=props.Name, value=props.Default or 0, min=props.Min or 0, max=props.Max or 100, callback=props.Callback or function()end}
+                table.insert(section.items, s) return s
             end
-            
             function section:Button(props)
-                local button = {
-                    type = "button",
-                    name = props.Name or "Button",
-                    comment = props.Comment or props.comment or "",
-                    callback = props.Callback or props.callback or function() end
-                }
-                
-                table.insert(section.items, button)
-                return button
+                local b = {type="button", name=props.Name, callback=props.Callback or function()end}
+                table.insert(section.items, b) return b
             end
-            
-            table.insert(page.sections, section)
-            return section
+            table.insert(page.sections, section) return section
         end
-        
-        table.insert(window.pages, page)
-        return page
+        table.insert(window.pages, page) return page
     end
     
-    if game and game:GetService("RunService") then
-        game:GetService("RunService").Render:Connect(function()
-            window:handleInput()
-            window:draw()
-        end)
-    end
+    game:GetService("RunService").Render:Connect(function()
+        if not window.initialized then window.initialized = true window:LoadConfig() end
+        window:handleInput()
+        window:draw()
+    end)
     
     return window
 end
