@@ -21,9 +21,7 @@ function library:Window(props)
         pageOpen = {},
         lastInputTime = 0,
         inputCooldown = 0.15,
-        toggleKey = props.ToggleKey or props.toggleKey or "F1",
-        configName = props.ConfigName or props.configName,
-        initialized = false
+        toggleKey = props.ToggleKey or props.toggleKey or "F1"
     }
     
     for i = 1, 20 do
@@ -77,61 +75,6 @@ function library:Window(props)
             end
         end
         return nil
-    end
-
-    function window:SaveConfig()
-        if not self.configName then return end
-        
-        if not isfolder("Configs") then
-            makefolder("Configs")
-        end
-        
-        local configData = {}
-        for _, page in ipairs(self.pages) do
-            configData[page.name] = {}
-            for _, section in ipairs(page.sections) do
-                configData[page.name][section.name] = {}
-                for _, item in ipairs(section.items) do
-                    if item.type == "toggle" or item.type == "slider" then
-                        configData[page.name][section.name][item.name] = item.value
-                    end
-                end
-            end
-        end
-        
-        local json = crypt.json.encode(configData)
-        writefile("Configs/" .. self.configName .. ".json", json)
-    end
-
-    function window:LoadConfig()
-        if not self.configName then return end
-        local path = "Configs/" .. self.configName .. ".json"
-        
-        if isfile(path) then
-            local success, result = pcall(function()
-                return crypt.json.decode(readfile(path))
-            end)
-            
-            if success and type(result) == "table" then
-                for _, page in ipairs(self.pages) do
-                    if result[page.name] then
-                        for _, section in ipairs(page.sections) do
-                            if result[page.name][section.name] then
-                                for _, item in ipairs(section.items) do
-                                    local savedValue = result[page.name][section.name][item.name]
-                                    if savedValue ~= nil then
-                                        item.value = savedValue
-                                        if item.callback then
-                                            item.callback(item.value)
-                                        end
-                                    end
-                                end
-                            end
-                        end
-                    end
-                end
-            end
-        end
     end
     
     function window:drawWindow()
@@ -222,8 +165,8 @@ function library:Window(props)
         
         if pressedKey == self.toggleKey then
             self.enabled = not self.enabled
-            return
-        end
+           return
+      end
         
         if not self.enabled then return end
         
@@ -245,7 +188,6 @@ function library:Window(props)
                 if currentItem.data.callback then
                     currentItem.data.callback(currentItem.data.value)
                 end
-                self:SaveConfig()
             end
         elseif pressedKey == "RightArrow" then
             if currentItem and currentItem.type == "item" and currentItem.data.type == "slider" then
@@ -254,7 +196,6 @@ function library:Window(props)
                 if currentItem.data.callback then
                     currentItem.data.callback(currentItem.data.value)
                 end
-                self:SaveConfig()
             end
         elseif pressedKey == "Enter" then
             if currentItem then
@@ -266,7 +207,6 @@ function library:Window(props)
                         if currentItem.data.callback then
                             currentItem.data.callback(currentItem.data.value)
                         end
-                        self:SaveConfig()
                     elseif currentItem.data.type == "button" then
                         if currentItem.data.callback then
                             currentItem.data.callback(true)
@@ -339,11 +279,6 @@ function library:Window(props)
     
     if game and game:GetService("RunService") then
         game:GetService("RunService").Render:Connect(function()
-            if not window.initialized then
-                window.initialized = true
-                window:LoadConfig()
-            end
-            
             window:handleInput()
             window:draw()
         end)
