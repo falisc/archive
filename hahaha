@@ -71,9 +71,18 @@ local Theme = {
     SubText         = Color3.fromRGB(150, 150, 150),
     Accent          = Color3.fromRGB(0, 191, 255),
     AccentDark      = Color3.fromRGB(0, 128, 255),
-    Font            = 2, -- Drawing Font enum index (executor-dependent)
+    -- NOTE: Theme.Font is resolved lazily below (Drawing.Fonts may not
+    -- exist until the Drawing API global is available at load time).
+    Font            = nil,
     TextSize        = 14,
 }
+
+-- Resolve the real font enum from Matcha's Drawing API (Drawing.Fonts.UI
+-- etc.), falling back gracefully if the global isn't shaped as expected.
+do
+    local ok, font = pcall(function() return Drawing.Fonts.UI end)
+    Theme.Font = (ok and font) or nil
+end
 
 --=====================================================================
 -- INTERNAL: Drawing helpers
@@ -95,6 +104,48 @@ local function destroyDrawing(obj)
     if obj and obj.Remove then
         pcall(function() obj:Remove() end)
     end
+end
+
+-- Square only supports Filled/Corner in this Drawing API (no outline
+-- mode), so a rectangle outline is built from 4 Line objects instead.
+local RectOutline = {}
+RectOutline.__index = RectOutline
+
+local function newRectOutline(x, y, w, h, color, thickness, zIndex)
+    local self = setmetatable({}, RectOutline)
+    thickness = thickness or 1
+    zIndex = zIndex or 5
+    self.Lines = {
+        top = newDrawing("Line", { Thickness = thickness, Color = color, ZIndex = zIndex }),
+        bottom = newDrawing("Line", { Thickness = thickness, Color = color, ZIndex = zIndex }),
+        left = newDrawing("Line", { Thickness = thickness, Color = color, ZIndex = zIndex }),
+        right = newDrawing("Line", { Thickness = thickness, Color = color, ZIndex = zIndex }),
+    }
+    self:SetRect(x, y, w, h)
+    return self
+end
+
+function RectOutline:SetRect(x, y, w, h)
+    self.Lines.top.From = Vector2.new(x, y)
+    self.Lines.top.To = Vector2.new(x + w, y)
+    self.Lines.bottom.From = Vector2.new(x, y + h)
+    self.Lines.bottom.To = Vector2.new(x + w, y + h)
+    self.Lines.left.From = Vector2.new(x, y)
+    self.Lines.left.To = Vector2.new(x, y + h)
+    self.Lines.right.From = Vector2.new(x + w, y)
+    self.Lines.right.To = Vector2.new(x + w, y + h)
+end
+
+function RectOutline:SetColor(color)
+    for _, line in pairs(self.Lines) do line.Color = color end
+end
+
+function RectOutline:SetVisible(v)
+    for _, line in pairs(self.Lines) do line.Visible = v end
+end
+
+function RectOutline:Destroy()
+    for _, line in pairs(self.Lines) do destroyDrawing(line) end
 end
 
 -- draws a horizontal gradient line by stacking thin colored segments
@@ -324,14 +375,10 @@ function Window:_buildChrome()
         ZIndex = 1,
     }))
 
-    self.Border = self:_track(newDrawing("Square", {
-        Size = Vector2.new(self.Width, self.Height),
-        Position = Vector2.new(self.X, self.Y + self.WatermarkHeight + 8),
-        Color = Theme.Accent,
-        Filled = false,
-        Thickness = 1,
-        ZIndex = 2,
-    }))
+    self.Border = newRectOutline(
+        self.X, self.Y + self.WatermarkHeight + 8, self.Width, self.Height,
+        Theme.Accent, 1, 2
+    )
 
     self.TitleBar = self:_track(newDrawing("Square", {
         Size = Vector2.new(self.Width, self.TitleBarHeight),
@@ -345,7 +392,7 @@ function Window:_buildChrome()
         Text = self.Title,
         Position = Vector2.new(self.X + 12, self.Y + self.WatermarkHeight + 8 + 9),
         Color = Theme.Text,
-        Size = Theme.TextSize,
+        FontSize = Theme.TextSize,
         Font = Theme.Font,
         ZIndex = 4,
     }))
@@ -355,7 +402,7 @@ function Window:_buildChrome()
         Text = "-",
         Position = Vector2.new(self.X + self.Width - 24, self.Y + self.WatermarkHeight + 8 + 8),
         Color = Theme.Text,
-        Size = 16,
+        FontSize = 16,
         Font = Theme.Font,
         ZIndex = 4,
     }))
@@ -380,7 +427,7 @@ function Window:_buildChrome()
     self.KeybindsLabel = self:_track(newDrawing("Text", {
         Text = "Keybinds",
         Color = Theme.Accent,
-        Size = Theme.TextSize,
+        FontSize = Theme.TextSize,
         Font = Theme.Font,
         ZIndex = 4,
     }))
@@ -397,20 +444,16 @@ function Window:_buildWatermark()
         ZIndex = 3,
     }))
 
-    self.WatermarkBorder = self:_track(newDrawing("Square", {
-        Size = Vector2.new(340, self.WatermarkHeight),
-        Position = Vector2.new(self.X, self.Y),
-        Color = Theme.Accent,
-        Filled = false,
-        Thickness = 1,
-        ZIndex = 4,
-    }))
+    self.WatermarkBorder = newRectOutline(
+        self.X, self.Y, 340, self.WatermarkHeight,
+        Theme.Accent, 1, 4
+    )
 
     self.WatermarkText = self:_track(newDrawing("Text", {
         Text = self.Title,
         Position = Vector2.new(self.X + 8, self.Y + 5),
         Color = Theme.Text,
-        Size = 13,
+        FontSize = 13,
         Font = Theme.Font,
         ZIndex = 5,
     }))
@@ -456,8 +499,7 @@ function Window:_layout()
     local barY = self.Y + self.WatermarkHeight + 8
     self.Background.Position = Vector2.new(self.X, barY)
     self.Background.Size = Vector2.new(self.Width, self.Height)
-    self.Border.Position = self.Background.Position
-    self.Border.Size = self.Background.Size
+    self.Border:SetRect(self.X, barY, self.Width, self.Height)
 
     self.TitleBar.Position = Vector2.new(self.X, barY)
     self.TitleBar.Size = Vector2.new(self.Width, self.TitleBarHeight)
@@ -465,7 +507,7 @@ function Window:_layout()
     self.MinimizeBtn.Position = Vector2.new(self.X + self.Width - 24, barY + 8)
 
     self.WatermarkBg.Position = Vector2.new(self.X, self.Y)
-    self.WatermarkBorder.Position = Vector2.new(self.X, self.Y)
+    self.WatermarkBorder:SetRect(self.X, self.Y, 340, self.WatermarkHeight)
     self.WatermarkText.Position = Vector2.new(self.X + 8, self.Y + 5)
 
     local sideY = barY + self.TitleBarHeight + self.TabBarHeight
@@ -492,13 +534,14 @@ function Window:_layout()
 
     local visible = self.Visible and not self.Minimized
     for _, d in ipairs(self.Drawings) do
-        if d ~= self.WatermarkBg and d ~= self.WatermarkBorder and d ~= self.WatermarkText then
+        if d ~= self.WatermarkBg and d ~= self.WatermarkText then
             d.Visible = visible
         end
     end
+    self.Border:SetVisible(visible)
     -- watermark always shows even when minimized
     self.WatermarkBg.Visible = self.Visible
-    self.WatermarkBorder.Visible = self.Visible
+    self.WatermarkBorder:SetVisible(self.Visible)
     self.WatermarkText.Visible = self.Visible
     self.SidebarBg.Visible = visible
     self.KeybindsLabel.Visible = visible
@@ -557,6 +600,8 @@ function Window:Destroy()
     for _, d in ipairs(self.Drawings) do
         destroyDrawing(d)
     end
+    if self.Border then self.Border:Destroy() end
+    if self.WatermarkBorder then self.WatermarkBorder:Destroy() end
     for _, tab in ipairs(self.Tabs) do
         tab:Destroy()
     end
@@ -592,7 +637,7 @@ function Tab:_build()
     self.Label = self:_track(newDrawing("Text", {
         Text = self.Name,
         Color = Theme.SubText,
-        Size = Theme.TextSize,
+        FontSize = Theme.TextSize,
         Font = Theme.Font,
         ZIndex = 4,
     }))
@@ -685,10 +730,10 @@ function Section:_build()
         Color = Theme.PanelLight, Filled = true, ZIndex = 3,
     }))
     self.HeaderText = self:_track(newDrawing("Text", {
-        Text = self.Name, Color = Theme.Text, Size = Theme.TextSize, Font = Theme.Font, ZIndex = 4,
+        Text = self.Name, Color = Theme.Text, FontSize = Theme.TextSize, Font = Theme.Font, ZIndex = 4,
     }))
     self.ToggleGlyph = self:_track(newDrawing("Text", {
-        Text = "-", Color = Theme.SubText, Size = Theme.TextSize, Font = Theme.Font, ZIndex = 4,
+        Text = "-", Color = Theme.SubText, FontSize = Theme.TextSize, Font = Theme.Font, ZIndex = 4,
     }))
     self.BodyBg = self:_track(newDrawing("Square", {
         Color = Theme.Panel, Filled = true, ZIndex = 2,
@@ -800,7 +845,7 @@ function Toggle.new(section, label, default, callback)
         Size = Vector2.new(16, 16), Color = Theme.Accent, Filled = self.Value, Thickness = 1, ZIndex = 4,
     }))
     self.Label = self:_track(newDrawing("Text", {
-        Text = label, Color = Theme.Text, Size = Theme.TextSize, Font = Theme.Font, ZIndex = 4,
+        Text = label, Color = Theme.Text, FontSize = Theme.TextSize, Font = Theme.Font, ZIndex = 4,
     }))
 
     Input:Register({
@@ -854,7 +899,7 @@ function Switch.new(section, label, default, callback)
         Size = Vector2.new(14, 14), Color = Theme.Accent, Filled = true, ZIndex = 5,
     }))
     self.Label = self:_track(newDrawing("Text", {
-        Text = label, Color = Theme.Text, Size = Theme.TextSize, Font = Theme.Font, ZIndex = 4,
+        Text = label, Color = Theme.Text, FontSize = Theme.TextSize, Font = Theme.Font, ZIndex = 4,
     }))
 
     Input:Register({
@@ -909,7 +954,7 @@ function Slider.new(section, label, min, max, default, callback, step)
 
     self.Label = self:_track(newDrawing("Text", {
         Text = ("%s: %s"):format(label, tostring(self.Value)),
-        Color = Theme.Text, Size = Theme.TextSize, Font = Theme.Font, ZIndex = 4,
+        Color = Theme.Text, FontSize = Theme.TextSize, Font = Theme.Font, ZIndex = 4,
     }))
     self.LabelBase = label
 
@@ -982,7 +1027,7 @@ function Button.new(section, label, callback)
         Size = Vector2.new(100, 24), Color = Theme.PanelLight, Filled = true, ZIndex = 4,
     }))
     self.Label = self:_track(newDrawing("Text", {
-        Text = label, Color = Theme.Text, Size = Theme.TextSize, Font = Theme.Font, ZIndex = 5,
+        Text = label, Color = Theme.Text, FontSize = Theme.TextSize, Font = Theme.Font, ZIndex = 5,
     }))
 
     Input:Register({
@@ -1029,11 +1074,9 @@ function TextInput.new(section, placeholder, callback)
     self.Bg = self:_track(newDrawing("Square", {
         Size = Vector2.new(100, 22), Color = Theme.PanelLight, Filled = true, ZIndex = 4,
     }))
-    self.Border = self:_track(newDrawing("Square", {
-        Size = Vector2.new(100, 22), Color = Theme.Border, Filled = false, Thickness = 1, ZIndex = 5,
-    }))
+    self.Border = newRectOutline(0, 0, 100, 22, Theme.Border, 1, 5)
     self.Text = self:_track(newDrawing("Text", {
-        Text = self.Placeholder, Color = Theme.SubText, Size = Theme.TextSize, Font = Theme.Font, ZIndex = 6,
+        Text = self.Placeholder, Color = Theme.SubText, FontSize = Theme.TextSize, Font = Theme.Font, ZIndex = 6,
     }))
 
     Input:Register({
@@ -1055,12 +1098,12 @@ end
 
 function TextInput:Focus()
     self.Focused = true
-    self.Border.Color = Theme.Accent
+    self.Border:SetColor(Theme.Accent)
 end
 
 function TextInput:Unfocus()
     self.Focused = false
-    self.Border.Color = Theme.Border
+    self.Border:SetColor(Theme.Border)
 end
 
 function TextInput:SetText(v)
@@ -1075,10 +1118,19 @@ function TextInput:_layout(x, y, w)
     self._active = true
     self.Bg.Position = Vector2.new(x, y)
     self.Bg.Size = Vector2.new(w, 22)
-    self.Border.Position = Vector2.new(x, y)
-    self.Border.Size = Vector2.new(w, 22)
+    self.Border:SetRect(x, y, w, 22)
     self.Text.Position = Vector2.new(x + 6, y + 4)
     return 22
+end
+
+function TextInput:SetVisible(v)
+    Control.SetVisible(self, v)
+    self.Border:SetVisible(v)
+end
+
+function TextInput:Destroy()
+    Control.Destroy(self)
+    self.Border:Destroy()
 end
 
 function Section:TextInput(placeholder, callback)
@@ -1108,10 +1160,10 @@ function Dropdown.new(section, label, options, default, callback)
     }))
     self.HeaderText = self:_track(newDrawing("Text", {
         Text = ("%s"):format(tostring(self.Value)),
-        Color = Theme.Text, Size = Theme.TextSize, Font = Theme.Font, ZIndex = 5,
+        Color = Theme.Text, FontSize = Theme.TextSize, Font = Theme.Font, ZIndex = 5,
     }))
     self.Glyph = self:_track(newDrawing("Text", {
-        Text = "+", Color = Theme.SubText, Size = Theme.TextSize, Font = Theme.Font, ZIndex = 5,
+        Text = "+", Color = Theme.SubText, FontSize = Theme.TextSize, Font = Theme.Font, ZIndex = 5,
     }))
 
     self.OptionDrawings = {} -- rebuilt when opened
@@ -1149,7 +1201,7 @@ function Dropdown:Toggle()
             })
             local text = newDrawing("Text", {
                 Position = Vector2.new(self._x + 6, oy + 3), Text = tostring(opt),
-                Color = Theme.Text, Size = Theme.TextSize, Font = Theme.Font, ZIndex = 11,
+                Color = Theme.Text, FontSize = Theme.TextSize, Font = Theme.Font, ZIndex = 11,
             })
             local clickable = Input:Register({
                 x = function() return self._x end, y = function() return oy end,
@@ -1216,14 +1268,12 @@ function ColorPicker.new(section, label, default, callback)
     self.Open = false
 
     self.Label = self:_track(newDrawing("Text", {
-        Text = label, Color = Theme.Text, Size = Theme.TextSize, Font = Theme.Font, ZIndex = 4,
+        Text = label, Color = Theme.Text, FontSize = Theme.TextSize, Font = Theme.Font, ZIndex = 4,
     }))
     self.Swatch = self:_track(newDrawing("Square", {
         Size = Vector2.new(18, 18), Color = self.Value, Filled = true, ZIndex = 5,
     }))
-    self.SwatchBorder = self:_track(newDrawing("Square", {
-        Size = Vector2.new(18, 18), Color = Theme.Border, Filled = false, Thickness = 1, ZIndex = 6,
-    }))
+    self.SwatchBorder = newRectOutline(0, 0, 18, 18, Theme.Border, 1, 6)
 
     self.RSlider, self.GSlider, self.BSlider = nil, nil, nil
 
@@ -1254,7 +1304,7 @@ function ColorPicker:_layout(x, y, w)
     self.Label.Position = Vector2.new(x, y)
     self._swatchX = x + w - 22
     self.Swatch.Position = Vector2.new(self._swatchX, y - 2)
-    self.SwatchBorder.Position = Vector2.new(self._swatchX, y - 2)
+    self.SwatchBorder:SetRect(self._swatchX, y - 2, 18, 18)
 
     local used = 18
 
@@ -1298,4 +1348,4 @@ end
 --=====================================================================
 
 print("[UILibrary] module fully loaded, returning Lib (type: " .. type(Lib) .. ")")
-return Lib
+_G.__UILIB = Lib
