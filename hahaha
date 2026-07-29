@@ -1,0 +1,1301 @@
+--[[
+    UILibrary.lua
+    Drawing-API based UI library for Matcha LuaVM
+    Chaining API pattern (INSui-style):
+
+        local Lib = loadstring(game:HttpGet("..."))()
+        local Window = Lib:CreateWindow("My UI")
+        local Tab = Window:Tab("Combat")
+        local Section = Tab:Section("Settings")
+        Section:Toggle("Enable Thing", false, function(v) end)
+
+    Everything here is a pure UI shell: components hold state and fire
+    callbacks, but contain no game logic themselves.
+]]
+
+-- Matcha is an external executor: it does NOT expose RunService /
+-- UserInputService event connections. Input is read by polling:
+--   - cursor position comes from LocalPlayer:GetMouse() (Mouse.X / Mouse.Y)
+--   - click state comes from ismouse1pressed() (no press/release event)
+-- Everything downstream polls inside a while-loop coroutine instead of
+-- binding to Roblox signals.
+
+local function safeGetService(name)
+    local ok, svc = pcall(function() return game:GetService(name) end)
+    if ok then return svc end
+    return nil
+end
+
+local Players = safeGetService("Players")
+local LocalPlayer = Players and Players.LocalPlayer or nil
+
+local function getMouse()
+    if not LocalPlayer then return nil end
+    local ok, mouse = pcall(function() return LocalPlayer:GetMouse() end)
+    if ok then return mouse end
+    return nil
+end
+
+local Mouse = getMouse()
+local MouseAvailable = Mouse ~= nil
+
+-- `spawn` is a Roblox global; it isn't guaranteed to exist in an
+-- external executor sandbox. Try spawn -> task.spawn -> coroutine
+-- as a fallback chain so a missing global can't crash library load.
+local function safeSpawn(fn)
+    if type(spawn) == "function" then
+        local ok = pcall(spawn, fn)
+        if ok then return true end
+    end
+    if type(task) == "table" and type(task.spawn) == "function" then
+        local ok = pcall(task.spawn, fn)
+        if ok then return true end
+    end
+    local ok = pcall(function()
+        local co = coroutine.create(fn)
+        coroutine.resume(co)
+    end)
+    return ok
+end
+
+--=====================================================================
+-- THEME
+--=====================================================================
+
+local Theme = {
+    Background      = Color3.fromRGB(20, 20, 20),
+    Panel           = Color3.fromRGB(30, 30, 30),
+    PanelLight      = Color3.fromRGB(38, 38, 38),
+    Border          = Color3.fromRGB(55, 55, 55),
+    Text            = Color3.fromRGB(230, 230, 230),
+    SubText         = Color3.fromRGB(150, 150, 150),
+    Accent          = Color3.fromRGB(0, 191, 255),
+    AccentDark      = Color3.fromRGB(0, 128, 255),
+    Font            = 2, -- Drawing Font enum index (executor-dependent)
+    TextSize        = 14,
+}
+
+--=====================================================================
+-- INTERNAL: Drawing helpers
+--=====================================================================
+
+local ActiveDrawings = {} -- registry so we can clean everything up on re-execute
+
+local function newDrawing(class, props)
+    local obj = Drawing.new(class)
+    for k, v in pairs(props or {}) do
+        obj[k] = v
+    end
+    obj.Visible = true
+    table.insert(ActiveDrawings, obj)
+    return obj
+end
+
+local function destroyDrawing(obj)
+    if obj and obj.Remove then
+        pcall(function() obj:Remove() end)
+    end
+end
+
+-- draws a horizontal gradient line by stacking thin colored segments
+local function drawGradientLine(x, y, width, thickness, colorA, colorB, steps)
+    steps = steps or 12
+    local segments = {}
+    local segW = width / steps
+    for i = 0, steps - 1 do
+        local t = i / (steps - 1)
+        local col = colorA:Lerp(colorB, t)
+        local seg = newDrawing("Line", {
+            From = Vector2.new(x + i * segW, y),
+            To = Vector2.new(x + (i + 1) * segW, y),
+            Color = col,
+            Thickness = thickness,
+            ZIndex = 5,
+        })
+        table.insert(segments, seg)
+    end
+    return segments
+end
+
+local function pointInRect(px, py, x, y, w, h)
+    return px >= x and px <= x + w and py >= y and py <= y + h
+end
+
+--=====================================================================
+-- INPUT MANAGER
+--=====================================================================
+
+local InputManager = {}
+InputManager.__index = InputManager
+
+function InputManager.new()
+    local self = setmetatable({}, InputManager)
+    self.MouseDown = false
+    self.MousePos = Vector2.new(0, 0)
+    self.MouseAvailable = MouseAvailable
+    self.Dragging = nil     -- currently dragged element {onDrag = fn, onRelease = fn}
+    self.Clickables = {}    -- list of {x,y,w,h (functions or numbers), onClick}
+    self.Running = true
+    self:_startLoop()
+    return self
+end
+
+function InputManager:_pollMousePos()
+    if not self.MouseAvailable then return end
+    local ok, x, y = pcall(function() return Mouse.X, Mouse.Y end)
+    if ok and x and y then
+        self.MousePos = Vector2.new(x, y)
+    else
+        -- Mouse object stopped working mid-session; mark unavailable
+        -- rather than repeatedly erroring every loop tick.
+        self.MouseAvailable = false
+    end
+end
+
+-- Matcha exposes input via polling functions (ismouse1pressed,
+-- iskeypressed) rather than Roblox events, so the whole input system
+-- runs as a simple game loop instead of signal connections.
+function InputManager:_startLoop()
+    safeSpawn(function()
+        while self.Running do
+            local ok = pcall(function()
+                self:_pollMousePos()
+
+                local down = ismouse1pressed and ismouse1pressed() or false
+
+                if down and not self.MouseDown then
+                    -- rising edge: button just pressed
+                    self.MouseDown = true
+                    self:_handleMouseDown()
+                elseif not down and self.MouseDown then
+                    -- falling edge: button just released
+                    self.MouseDown = false
+                    if self.Dragging and self.Dragging.onRelease then
+                        self.Dragging.onRelease()
+                    end
+                    self.Dragging = nil
+                elseif down and self.MouseDown and self.Dragging and self.Dragging.onDrag then
+                    self.Dragging.onDrag(self.MousePos)
+                end
+            end)
+
+            if not ok then
+                warn("[UILibrary] input loop tick errored; continuing.")
+            end
+
+            wait(1 / 60)
+        end
+    end)
+end
+
+function InputManager:Stop()
+    self.Running = false
+end
+
+function InputManager:_handleMouseDown()
+    local mp = self.MousePos
+    -- iterate in reverse so top-most (last drawn) elements get priority
+    for i = #self.Clickables, 1, -1 do
+        local c = self.Clickables[i]
+        if c.active == nil or c.active() then
+            local x, y, w, h = c.x(), c.y(), c.w(), c.h()
+            if pointInRect(mp.X, mp.Y, x, y, w, h) then
+                if c.onClick then c.onClick(mp) end
+                if c.draggable then
+                    self.Dragging = {
+                        onDrag = c.onDrag,
+                        onRelease = c.onRelease,
+                    }
+                end
+                return true
+            end
+        end
+    end
+    return false
+end
+
+function InputManager:Register(entry)
+    -- entry = {x=fn, y=fn, w=fn, h=fn, onClick=fn, draggable=bool, onDrag=fn, onRelease=fn, active=fn}
+    table.insert(self.Clickables, entry)
+    return entry
+end
+
+function InputManager:Unregister(entry)
+    for i, c in ipairs(self.Clickables) do
+        if c == entry then
+            table.remove(self.Clickables, i)
+            break
+        end
+    end
+end
+
+print("[UILibrary] about to construct InputManager...")
+local Input
+do
+    local ok, result = pcall(InputManager.new)
+    if ok then
+        Input = result
+        print("[UILibrary] InputManager constructed OK")
+    else
+        warn("[UILibrary] InputManager.new() FAILED: " .. tostring(result))
+        -- fall back to a stub so the rest of the library can still
+        -- load; controls just won't receive input, but Lib won't be nil.
+        Input = setmetatable({
+            Clickables = {},
+            Register = function(self, e) table.insert(self.Clickables, e); return e end,
+            Unregister = function(self, e) end,
+            Stop = function(self) end,
+        }, { __index = function() return function() end end })
+    end
+end
+
+--=====================================================================
+-- LIB ROOT
+--=====================================================================
+
+local Lib = {}
+Lib.__index = Lib
+Lib.Theme = Theme
+Lib.Windows = {}
+
+function Lib:CreateWindow(title, width, height)
+    return self.Window.new(title, width, height)
+end
+
+function Lib:Destroy()
+    for _, w in ipairs(self.Windows) do
+        w:Destroy()
+    end
+    Input:Stop()
+    for _, d in ipairs(ActiveDrawings) do
+        destroyDrawing(d)
+    end
+    ActiveDrawings = {}
+end
+
+--=====================================================================
+-- WINDOW
+--=====================================================================
+
+local Window = {}
+Window.__index = Window
+Lib.Window = Window
+
+function Window.new(title, width, height)
+    width = width or 900
+    height = height or 620
+
+    local self = setmetatable({}, Window)
+    self.Title = title or "UI Library"
+    self.X, self.Y = 300, 150
+    self.Width, self.Height = width, height
+    self.TitleBarHeight = 34
+    self.WatermarkHeight = 22
+    self.TabBarHeight = 28
+    self.SidebarWidth = 170
+
+    self.Tabs = {}
+    self.ActiveTab = nil
+    self.Visible = true
+    self.Minimized = false
+
+    self.Drawings = {}
+    self.Connections = {}
+
+    self:_buildWatermark()
+    self:_buildChrome()
+    self:_bindDrag()
+
+    table.insert(Lib.Windows, self)
+    return self
+end
+
+function Window:_track(d)
+    table.insert(self.Drawings, d)
+    return d
+end
+
+function Window:_buildChrome()
+    self.Background = self:_track(newDrawing("Square", {
+        Size = Vector2.new(self.Width, self.Height),
+        Position = Vector2.new(self.X, self.Y + self.WatermarkHeight + 8),
+        Color = Theme.Background,
+        Filled = true,
+        ZIndex = 1,
+    }))
+
+    self.Border = self:_track(newDrawing("Square", {
+        Size = Vector2.new(self.Width, self.Height),
+        Position = Vector2.new(self.X, self.Y + self.WatermarkHeight + 8),
+        Color = Theme.Accent,
+        Filled = false,
+        Thickness = 1,
+        ZIndex = 2,
+    }))
+
+    self.TitleBar = self:_track(newDrawing("Square", {
+        Size = Vector2.new(self.Width, self.TitleBarHeight),
+        Position = Vector2.new(self.X, self.Y + self.WatermarkHeight + 8),
+        Color = Theme.Panel,
+        Filled = true,
+        ZIndex = 3,
+    }))
+
+    self.TitleText = self:_track(newDrawing("Text", {
+        Text = self.Title,
+        Position = Vector2.new(self.X + 12, self.Y + self.WatermarkHeight + 8 + 9),
+        Color = Theme.Text,
+        Size = Theme.TextSize,
+        Font = Theme.Font,
+        ZIndex = 4,
+    }))
+
+    -- minimize button
+    self.MinimizeBtn = self:_track(newDrawing("Text", {
+        Text = "-",
+        Position = Vector2.new(self.X + self.Width - 24, self.Y + self.WatermarkHeight + 8 + 8),
+        Color = Theme.Text,
+        Size = 16,
+        Font = Theme.Font,
+        ZIndex = 4,
+    }))
+
+    Input:Register({
+        x = function() return self.X + self.Width - 30 end,
+        y = function() return self.Y + self.WatermarkHeight + 8 end,
+        w = function() return 30 end,
+        h = function() return self.TitleBarHeight end,
+        active = function() return self.Visible end,
+        onClick = function() self:ToggleMinimize() end,
+    })
+
+    -- sidebar
+    self.SidebarBg = self:_track(newDrawing("Square", {
+        Size = Vector2.new(self.SidebarWidth, self.Height - self.TitleBarHeight - self.TabBarHeight),
+        Color = Theme.Panel,
+        Filled = true,
+        ZIndex = 2,
+    }))
+
+    self.KeybindsLabel = self:_track(newDrawing("Text", {
+        Text = "Keybinds",
+        Color = Theme.Accent,
+        Size = Theme.TextSize,
+        Font = Theme.Font,
+        ZIndex = 4,
+    }))
+
+    self:_layout()
+end
+
+function Window:_buildWatermark()
+    self.WatermarkBg = self:_track(newDrawing("Square", {
+        Size = Vector2.new(340, self.WatermarkHeight),
+        Position = Vector2.new(self.X, self.Y),
+        Color = Theme.Panel,
+        Filled = true,
+        ZIndex = 3,
+    }))
+
+    self.WatermarkBorder = self:_track(newDrawing("Square", {
+        Size = Vector2.new(340, self.WatermarkHeight),
+        Position = Vector2.new(self.X, self.Y),
+        Color = Theme.Accent,
+        Filled = false,
+        Thickness = 1,
+        ZIndex = 4,
+    }))
+
+    self.WatermarkText = self:_track(newDrawing("Text", {
+        Text = self.Title,
+        Position = Vector2.new(self.X + 8, self.Y + 5),
+        Color = Theme.Text,
+        Size = 13,
+        Font = Theme.Font,
+        ZIndex = 5,
+    }))
+
+    self._watermarkFields = {} -- name -> value, rebuilt into text each frame
+    self._lastWatermarkUpdate = 0
+    self.Running = true
+
+    safeSpawn(function()
+        while self.Running do
+            local ok = pcall(function()
+                if self.Visible then
+                    self:_refreshWatermarkText()
+                end
+            end)
+            if not ok then
+                warn("[UILibrary] watermark refresh loop errored; continuing.")
+            end
+            wait(0.5)
+        end
+    end)
+end
+
+-- Public: set arbitrary watermark fields, e.g. Window:SetWatermark({FPS=126, Ping=27})
+function Window:SetWatermark(fields)
+    for k, v in pairs(fields) do
+        self._watermarkFields[k] = v
+    end
+    self:_refreshWatermarkText()
+end
+
+function Window:_refreshWatermarkText()
+    local parts = { self.Title }
+    -- preserve insertion-ish order isn't guaranteed in Lua tables;
+    -- caller can pass an ordered array instead via SetWatermarkOrdered if needed
+    for k, v in pairs(self._watermarkFields) do
+        table.insert(parts, k .. " - " .. tostring(v))
+    end
+    self.WatermarkText.Text = table.concat(parts, " | ")
+end
+
+function Window:_layout()
+    local barY = self.Y + self.WatermarkHeight + 8
+    self.Background.Position = Vector2.new(self.X, barY)
+    self.Background.Size = Vector2.new(self.Width, self.Height)
+    self.Border.Position = self.Background.Position
+    self.Border.Size = self.Background.Size
+
+    self.TitleBar.Position = Vector2.new(self.X, barY)
+    self.TitleBar.Size = Vector2.new(self.Width, self.TitleBarHeight)
+    self.TitleText.Position = Vector2.new(self.X + 12, barY + 9)
+    self.MinimizeBtn.Position = Vector2.new(self.X + self.Width - 24, barY + 8)
+
+    self.WatermarkBg.Position = Vector2.new(self.X, self.Y)
+    self.WatermarkBorder.Position = Vector2.new(self.X, self.Y)
+    self.WatermarkText.Position = Vector2.new(self.X + 8, self.Y + 5)
+
+    local sideY = barY + self.TitleBarHeight + self.TabBarHeight
+    self.SidebarBg.Position = Vector2.new(self.X, sideY)
+    self.SidebarBg.Size = Vector2.new(self.SidebarWidth, self.Height - self.TitleBarHeight - self.TabBarHeight)
+    self.KeybindsLabel.Position = Vector2.new(self.X + 10, sideY + 8)
+
+    -- tab bar
+    local tx = self.X
+    for i, tab in ipairs(self.Tabs) do
+        tab:_layout(tx, barY + self.TitleBarHeight)
+        tx = tx + tab.Width
+    end
+
+    -- content area for active tab
+    local contentX = self.X + self.SidebarWidth
+    local contentY = sideY
+    local contentW = self.Width - self.SidebarWidth
+    local contentH = self.Height - self.TitleBarHeight - self.TabBarHeight
+    for _, tab in ipairs(self.Tabs) do
+        tab:_layoutContent(contentX, contentY, contentW, contentH)
+        tab:SetVisible(tab == self.ActiveTab and self.Visible and not self.Minimized)
+    end
+
+    local visible = self.Visible and not self.Minimized
+    for _, d in ipairs(self.Drawings) do
+        if d ~= self.WatermarkBg and d ~= self.WatermarkBorder and d ~= self.WatermarkText then
+            d.Visible = visible
+        end
+    end
+    -- watermark always shows even when minimized
+    self.WatermarkBg.Visible = self.Visible
+    self.WatermarkBorder.Visible = self.Visible
+    self.WatermarkText.Visible = self.Visible
+    self.SidebarBg.Visible = visible
+    self.KeybindsLabel.Visible = visible
+end
+
+function Window:_bindDrag()
+    Input:Register({
+        x = function() return self.X end,
+        y = function() return self.Y + self.WatermarkHeight + 8 end,
+        w = function() return self.Width - 30 end,
+        h = function() return self.TitleBarHeight end,
+        active = function() return self.Visible end,
+        draggable = true,
+        onClick = function(mp)
+            self._dragOffset = Vector2.new(mp.X - self.X, mp.Y - self.Y)
+        end,
+        onDrag = function(mp)
+            if not self._dragOffset then return end
+            self.X = mp.X - self._dragOffset.X
+            self.Y = mp.Y - self._dragOffset.Y
+            self:_layout()
+        end,
+        onRelease = function()
+            self._dragOffset = nil
+        end,
+    })
+end
+
+function Window:ToggleMinimize()
+    self.Minimized = not self.Minimized
+    self:_layout()
+end
+
+function Window:SetVisible(v)
+    self.Visible = v
+    self:_layout()
+end
+
+function Window:Tab(name)
+    local tab = Lib.Tab.new(self, name)
+    table.insert(self.Tabs, tab)
+    if not self.ActiveTab then
+        self.ActiveTab = tab
+    end
+    self:_layout()
+    return tab
+end
+
+function Window:SelectTab(tab)
+    self.ActiveTab = tab
+    self:_layout()
+end
+
+function Window:Destroy()
+    self.Running = false -- stops the watermark polling loop
+    for _, d in ipairs(self.Drawings) do
+        destroyDrawing(d)
+    end
+    for _, tab in ipairs(self.Tabs) do
+        tab:Destroy()
+    end
+end
+
+--=====================================================================
+-- TAB
+--=====================================================================
+
+local Tab = {}
+Tab.__index = Tab
+Lib.Tab = Tab
+
+function Tab.new(window, name)
+    local self = setmetatable({}, Tab)
+    self.Window = window
+    self.Name = name
+    self.Width = math.max(80, #name * 8 + 24)
+    self.Sections = {}
+    self.Drawings = {}
+
+    self.Underline = nil
+    self:_build()
+    return self
+end
+
+function Tab:_track(d)
+    table.insert(self.Drawings, d)
+    return d
+end
+
+function Tab:_build()
+    self.Label = self:_track(newDrawing("Text", {
+        Text = self.Name,
+        Color = Theme.SubText,
+        Size = Theme.TextSize,
+        Font = Theme.Font,
+        ZIndex = 4,
+    }))
+
+    Input:Register({
+        x = function() return self._x end,
+        y = function() return self._y end,
+        w = function() return self.Width end,
+        h = function() return self.Window.TabBarHeight end,
+        active = function() return self.Window.Visible and not self.Window.Minimized end,
+        onClick = function() self.Window:SelectTab(self) end,
+    })
+end
+
+function Tab:_layout(x, y)
+    self._x, self._y = x, y
+    self.Label.Position = Vector2.new(x + 12, y + 6)
+    self.Label.Color = (self.Window.ActiveTab == self) and Theme.Text or Theme.SubText
+
+    for _, seg in ipairs(self._underlineSegs or {}) do
+        destroyDrawing(seg)
+    end
+    self._underlineSegs = nil
+
+    if self.Window.ActiveTab == self then
+        self._underlineSegs = drawGradientLine(
+            x, y + self.Window.TabBarHeight - 2, self.Width, 2,
+            Theme.Accent, Theme.AccentDark, 8
+        )
+    end
+end
+
+function Tab:_layoutContent(x, y, w, h)
+    local cy = y + 8
+    for _, section in ipairs(self.Sections) do
+        local usedH = section:_layout(x + 8, cy, w - 16)
+        cy = cy + usedH + 8
+    end
+end
+
+function Tab:SetVisible(v)
+    self.Label.Visible = v
+    for _, seg in ipairs(self._underlineSegs or {}) do
+        seg.Visible = v
+    end
+    for _, section in ipairs(self.Sections) do
+        section:SetVisible(v)
+    end
+end
+
+function Tab:Section(name)
+    local section = Lib.Section.new(self, name)
+    table.insert(self.Sections, section)
+    self.Window:_layout()
+    return section
+end
+
+function Tab:Destroy()
+    for _, d in ipairs(self.Drawings) do destroyDrawing(d) end
+    for _, seg in ipairs(self._underlineSegs or {}) do destroyDrawing(seg) end
+    for _, s in ipairs(self.Sections) do s:Destroy() end
+end
+
+--=====================================================================
+-- SECTION
+--=====================================================================
+
+local Section = {}
+Section.__index = Section
+Lib.Section = Section
+
+function Section.new(tab, name)
+    local self = setmetatable({}, Section)
+    self.Tab = tab
+    self.Name = name
+    self.Collapsed = false
+    self.Controls = {}
+    self.Drawings = {}
+    self:_build()
+    return self
+end
+
+function Section:_track(d)
+    table.insert(self.Drawings, d)
+    return d
+end
+
+function Section:_build()
+    self.HeaderBg = self:_track(newDrawing("Square", {
+        Color = Theme.PanelLight, Filled = true, ZIndex = 3,
+    }))
+    self.HeaderText = self:_track(newDrawing("Text", {
+        Text = self.Name, Color = Theme.Text, Size = Theme.TextSize, Font = Theme.Font, ZIndex = 4,
+    }))
+    self.ToggleGlyph = self:_track(newDrawing("Text", {
+        Text = "-", Color = Theme.SubText, Size = Theme.TextSize, Font = Theme.Font, ZIndex = 4,
+    }))
+    self.BodyBg = self:_track(newDrawing("Square", {
+        Color = Theme.Panel, Filled = true, ZIndex = 2,
+    }))
+
+    Input:Register({
+        x = function() return self._x end,
+        y = function() return self._y end,
+        w = function() return self._w end,
+        h = function() return 26 end,
+        active = function() return self.Tab.Window.ActiveTab == self.Tab and self.Tab.Window.Visible end,
+        onClick = function() self:ToggleCollapse() end,
+    })
+end
+
+function Section:ToggleCollapse()
+    self.Collapsed = not self.Collapsed
+    self.ToggleGlyph.Text = self.Collapsed and "+" or "-"
+    self.Tab.Window:_layout()
+end
+
+-- lays out header + controls, returns total height used
+function Section:_layout(x, y, w)
+    self._x, self._y, self._w = x, y, w
+
+    self.HeaderBg.Position = Vector2.new(x, y)
+    self.HeaderBg.Size = Vector2.new(w, 26)
+    self.HeaderText.Position = Vector2.new(x + 8, y + 6)
+    self.ToggleGlyph.Position = Vector2.new(x + w - 16, y + 6)
+
+    for _, seg in ipairs(self._headerLine or {}) do destroyDrawing(seg) end
+    self._headerLine = drawGradientLine(x, y + 25, w, 1, Theme.Accent, Theme.AccentDark, 10)
+
+    local cy = y + 30
+    if not self.Collapsed then
+        for _, ctrl in ipairs(self.Controls) do
+            local h = ctrl:_layout(x + 8, cy, w - 16)
+            cy = cy + h + 6
+        end
+    end
+
+    local bodyH = self.Collapsed and 0 or (cy - (y + 30))
+    self.BodyBg.Position = Vector2.new(x, y + 26)
+    self.BodyBg.Size = Vector2.new(w, math.max(0, bodyH))
+    self.BodyBg.Visible = not self.Collapsed
+
+    for _, ctrl in ipairs(self.Controls) do
+        ctrl:SetVisible(not self.Collapsed)
+    end
+
+    return 26 + (self.Collapsed and 0 or bodyH)
+end
+
+function Section:SetVisible(v)
+    for _, d in ipairs(self.Drawings) do d.Visible = v end
+    for _, seg in ipairs(self._headerLine or {}) do seg.Visible = v end
+    for _, ctrl in ipairs(self.Controls) do
+        ctrl:SetVisible(v and not self.Collapsed)
+    end
+end
+
+function Section:Destroy()
+    for _, d in ipairs(self.Drawings) do destroyDrawing(d) end
+    for _, seg in ipairs(self._headerLine or {}) do destroyDrawing(seg) end
+    for _, c in ipairs(self.Controls) do c:Destroy() end
+end
+
+--=====================================================================
+-- BASE CONTROL
+--=====================================================================
+
+local Control = {}
+Control.__index = Control
+
+function Control.new(section)
+    local self = setmetatable({}, Control)
+    self.Section = section
+    self.Drawings = {}
+    return self
+end
+
+function Control:_track(d)
+    table.insert(self.Drawings, d)
+    return d
+end
+
+function Control:SetVisible(v)
+    for _, d in ipairs(self.Drawings) do d.Visible = v end
+end
+
+function Control:Destroy()
+    for _, d in ipairs(self.Drawings) do destroyDrawing(d) end
+end
+
+--=====================================================================
+-- TOGGLE / CHECKBOX
+--=====================================================================
+
+local Toggle = setmetatable({}, { __index = Control })
+Toggle.__index = Toggle
+Lib.Toggle = Toggle
+
+function Toggle.new(section, label, default, callback)
+    local self = setmetatable(Control.new(section), Toggle)
+    self.Value = default or false
+    self.Callback = callback
+
+    self.Box = self:_track(newDrawing("Square", {
+        Size = Vector2.new(16, 16), Color = Theme.Accent, Filled = self.Value, Thickness = 1, ZIndex = 4,
+    }))
+    self.Label = self:_track(newDrawing("Text", {
+        Text = label, Color = Theme.Text, Size = Theme.TextSize, Font = Theme.Font, ZIndex = 4,
+    }))
+
+    Input:Register({
+        x = function() return self._x end, y = function() return self._y end,
+        w = function() return 16 end, h = function() return 16 end,
+        active = function() return self._active end,
+        onClick = function() self:Set(not self.Value) end,
+    })
+
+    return self
+end
+
+function Toggle:Set(v)
+    self.Value = v
+    self.Box.Filled = v
+    if self.Callback then self.Callback(v) end
+end
+
+function Toggle:_layout(x, y, w)
+    self._x, self._y = x, y
+    self._active = true
+    self.Box.Position = Vector2.new(x, y)
+    self.Label.Position = Vector2.new(x + 24, y - 1)
+    return 18
+end
+
+function Section:Toggle(label, default, callback)
+    local c = Toggle.new(self, label, default, callback)
+    table.insert(self.Controls, c)
+    self.Tab.Window:_layout()
+    return c
+end
+
+--=====================================================================
+-- SWITCH (styled toggle)
+--=====================================================================
+
+local Switch = setmetatable({}, { __index = Control })
+Switch.__index = Switch
+Lib.Switch = Switch
+
+function Switch.new(section, label, default, callback)
+    local self = setmetatable(Control.new(section), Switch)
+    self.Value = default or false
+    self.Callback = callback
+
+    self.Track = self:_track(newDrawing("Square", {
+        Size = Vector2.new(34, 16), Color = Theme.PanelLight, Filled = true, ZIndex = 4,
+    }))
+    self.Knob = self:_track(newDrawing("Square", {
+        Size = Vector2.new(14, 14), Color = Theme.Accent, Filled = true, ZIndex = 5,
+    }))
+    self.Label = self:_track(newDrawing("Text", {
+        Text = label, Color = Theme.Text, Size = Theme.TextSize, Font = Theme.Font, ZIndex = 4,
+    }))
+
+    Input:Register({
+        x = function() return self._x end, y = function() return self._y end,
+        w = function() return 34 end, h = function() return 16 end,
+        active = function() return self._active end,
+        onClick = function() self:Set(not self.Value) end,
+    })
+
+    return self
+end
+
+function Switch:Set(v)
+    self.Value = v
+    self.Knob.Position = v
+        and Vector2.new(self._x + 19, self._y + 1)
+        or Vector2.new(self._x + 1, self._y + 1)
+    self.Track.Color = v and Theme.Accent or Theme.PanelLight
+    if self.Callback then self.Callback(v) end
+end
+
+function Switch:_layout(x, y, w)
+    self._x, self._y = x, y
+    self._active = true
+    self.Track.Position = Vector2.new(x, y)
+    self.Label.Position = Vector2.new(x + 44, y - 1)
+    self:Set(self.Value)
+    return 18
+end
+
+function Section:Switch(label, default, callback)
+    local c = Switch.new(self, label, default, callback)
+    table.insert(self.Controls, c)
+    self.Tab.Window:_layout()
+    return c
+end
+
+--=====================================================================
+-- SLIDER
+--=====================================================================
+
+local Slider = setmetatable({}, { __index = Control })
+Slider.__index = Slider
+Lib.Slider = Slider
+
+function Slider.new(section, label, min, max, default, callback, step)
+    local self = setmetatable(Control.new(section), Slider)
+    self.Min, self.Max = min, max
+    self.Step = step or 1
+    self.Value = default or min
+    self.Callback = callback
+
+    self.Label = self:_track(newDrawing("Text", {
+        Text = ("%s: %s"):format(label, tostring(self.Value)),
+        Color = Theme.Text, Size = Theme.TextSize, Font = Theme.Font, ZIndex = 4,
+    }))
+    self.LabelBase = label
+
+    self.Track = self:_track(newDrawing("Square", {
+        Size = Vector2.new(100, 4), Color = Theme.PanelLight, Filled = true, ZIndex = 4,
+    }))
+    self.Fill = self:_track(newDrawing("Square", {
+        Size = Vector2.new(0, 4), Color = Theme.Accent, Filled = true, ZIndex = 5,
+    }))
+
+    Input:Register({
+        x = function() return self._x end, y = function() return self._y end,
+        w = function() return self._w end, h = function() return 10 end,
+        active = function() return self._active end,
+        draggable = true,
+        onClick = function(mp) self:_setFromMouse(mp.X) end,
+        onDrag = function(mp) self:_setFromMouse(mp.X) end,
+    })
+
+    return self
+end
+
+function Slider:_setFromMouse(mx)
+    local pct = math.clamp((mx - self._x) / self._w, 0, 1)
+    local raw = self.Min + pct * (self.Max - self.Min)
+    local stepped = math.floor(raw / self.Step + 0.5) * self.Step
+    self:Set(stepped)
+end
+
+function Slider:Set(v)
+    v = math.clamp(v, self.Min, self.Max)
+    self.Value = v
+    local pct = (self.Max > self.Min) and (v - self.Min) / (self.Max - self.Min) or 0
+    self.Fill.Size = Vector2.new(self._w * pct, 4)
+    self.Label.Text = ("%s: %s"):format(self.LabelBase, tostring(v))
+    if self.Callback then self.Callback(v) end
+end
+
+function Slider:_layout(x, y, w)
+    self._x, self._y, self._w = x, y + 16, w
+    self._active = true
+    self.Label.Position = Vector2.new(x, y)
+    self.Track.Position = Vector2.new(x, y + 16)
+    self.Track.Size = Vector2.new(w, 4)
+    self.Fill.Position = Vector2.new(x, y + 16)
+    self:Set(self.Value)
+    return 26
+end
+
+function Section:Slider(label, min, max, default, callback, step)
+    local c = Slider.new(self, label, min, max, default, callback, step)
+    table.insert(self.Controls, c)
+    self.Tab.Window:_layout()
+    return c
+end
+
+--=====================================================================
+-- BUTTON
+--=====================================================================
+
+local Button = setmetatable({}, { __index = Control })
+Button.__index = Button
+Lib.Button = Button
+
+function Button.new(section, label, callback)
+    local self = setmetatable(Control.new(section), Button)
+    self.Callback = callback
+
+    self.Bg = self:_track(newDrawing("Square", {
+        Size = Vector2.new(100, 24), Color = Theme.PanelLight, Filled = true, ZIndex = 4,
+    }))
+    self.Label = self:_track(newDrawing("Text", {
+        Text = label, Color = Theme.Text, Size = Theme.TextSize, Font = Theme.Font, ZIndex = 5,
+    }))
+
+    Input:Register({
+        x = function() return self._x end, y = function() return self._y end,
+        w = function() return self._w end, h = function() return 24 end,
+        active = function() return self._active end,
+        onClick = function() if self.Callback then self.Callback() end end,
+    })
+
+    return self
+end
+
+function Button:_layout(x, y, w)
+    self._x, self._y, self._w = x, y, w
+    self._active = true
+    self.Bg.Position = Vector2.new(x, y)
+    self.Bg.Size = Vector2.new(w, 24)
+    self.Label.Position = Vector2.new(x + 8, y + 5)
+    return 24
+end
+
+function Section:Button(label, callback)
+    local c = Button.new(self, label, callback)
+    table.insert(self.Controls, c)
+    self.Tab.Window:_layout()
+    return c
+end
+
+--=====================================================================
+-- TEXT INPUT
+--=====================================================================
+
+local TextInput = setmetatable({}, { __index = Control })
+TextInput.__index = TextInput
+Lib.TextInput = TextInput
+
+function TextInput.new(section, placeholder, callback)
+    local self = setmetatable(Control.new(section), TextInput)
+    self.Value = ""
+    self.Placeholder = placeholder or ""
+    self.Callback = callback
+    self.Focused = false
+
+    self.Bg = self:_track(newDrawing("Square", {
+        Size = Vector2.new(100, 22), Color = Theme.PanelLight, Filled = true, ZIndex = 4,
+    }))
+    self.Border = self:_track(newDrawing("Square", {
+        Size = Vector2.new(100, 22), Color = Theme.Border, Filled = false, Thickness = 1, ZIndex = 5,
+    }))
+    self.Text = self:_track(newDrawing("Text", {
+        Text = self.Placeholder, Color = Theme.SubText, Size = Theme.TextSize, Font = Theme.Font, ZIndex = 6,
+    }))
+
+    Input:Register({
+        x = function() return self._x end, y = function() return self._y end,
+        w = function() return self._w end, h = function() return 22 end,
+        active = function() return self._active end,
+        onClick = function() self:Focus() end,
+    })
+
+    -- NOTE: keyboard capture isn't defined in the Matcha input docs
+    -- provided (only iskeypressed()/keypress()/keyrelease() for
+    -- simulating/checking individual keys, no text-composition event).
+    -- Poll iskeypressed(keycode) for each key you want to support in
+    -- your own loop and feed characters into self:SetText(...) while
+    -- self.Focused is true.
+
+    return self
+end
+
+function TextInput:Focus()
+    self.Focused = true
+    self.Border.Color = Theme.Accent
+end
+
+function TextInput:Unfocus()
+    self.Focused = false
+    self.Border.Color = Theme.Border
+end
+
+function TextInput:SetText(v)
+    self.Value = v
+    self.Text.Text = (v == "" and self.Placeholder or v)
+    self.Text.Color = (v == "" and Theme.SubText or Theme.Text)
+    if self.Callback then self.Callback(v) end
+end
+
+function TextInput:_layout(x, y, w)
+    self._x, self._y, self._w = x, y, w
+    self._active = true
+    self.Bg.Position = Vector2.new(x, y)
+    self.Bg.Size = Vector2.new(w, 22)
+    self.Border.Position = Vector2.new(x, y)
+    self.Border.Size = Vector2.new(w, 22)
+    self.Text.Position = Vector2.new(x + 6, y + 4)
+    return 22
+end
+
+function Section:TextInput(placeholder, callback)
+    local c = TextInput.new(self, placeholder, callback)
+    table.insert(self.Controls, c)
+    self.Tab.Window:_layout()
+    return c
+end
+
+--=====================================================================
+-- DROPDOWN
+--=====================================================================
+
+local Dropdown = setmetatable({}, { __index = Control })
+Dropdown.__index = Dropdown
+Lib.Dropdown = Dropdown
+
+function Dropdown.new(section, label, options, default, callback)
+    local self = setmetatable(Control.new(section), Dropdown)
+    self.Options = options or {}
+    self.Value = default or self.Options[1]
+    self.Callback = callback
+    self.Open = false
+
+    self.Header = self:_track(newDrawing("Square", {
+        Size = Vector2.new(100, 22), Color = Theme.PanelLight, Filled = true, ZIndex = 4,
+    }))
+    self.HeaderText = self:_track(newDrawing("Text", {
+        Text = ("%s"):format(tostring(self.Value)),
+        Color = Theme.Text, Size = Theme.TextSize, Font = Theme.Font, ZIndex = 5,
+    }))
+    self.Glyph = self:_track(newDrawing("Text", {
+        Text = "+", Color = Theme.SubText, Size = Theme.TextSize, Font = Theme.Font, ZIndex = 5,
+    }))
+
+    self.OptionDrawings = {} -- rebuilt when opened
+
+    Input:Register({
+        x = function() return self._x end, y = function() return self._y end,
+        w = function() return self._w end, h = function() return 22 end,
+        active = function() return self._active end,
+        onClick = function() self:Toggle() end,
+    })
+
+    return self
+end
+
+function Dropdown:_clearOptions()
+    for _, entry in ipairs(self.OptionDrawings) do
+        destroyDrawing(entry.bg)
+        destroyDrawing(entry.text)
+        Input:Unregister(entry.clickable)
+    end
+    self.OptionDrawings = {}
+end
+
+function Dropdown:Toggle()
+    self.Open = not self.Open
+    self.Glyph.Text = self.Open and "-" or "+"
+    self:_clearOptions()
+
+    if self.Open then
+        for i, opt in ipairs(self.Options) do
+            local oy = self._y + 22 + (i - 1) * 20
+            local bg = newDrawing("Square", {
+                Position = Vector2.new(self._x, oy), Size = Vector2.new(self._w, 20),
+                Color = Theme.Panel, Filled = true, ZIndex = 10,
+            })
+            local text = newDrawing("Text", {
+                Position = Vector2.new(self._x + 6, oy + 3), Text = tostring(opt),
+                Color = Theme.Text, Size = Theme.TextSize, Font = Theme.Font, ZIndex = 11,
+            })
+            local clickable = Input:Register({
+                x = function() return self._x end, y = function() return oy end,
+                w = function() return self._w end, h = function() return 20 end,
+                active = function() return self.Open end,
+                onClick = function()
+                    self:Set(opt)
+                    self:Toggle()
+                end,
+            })
+            table.insert(self.OptionDrawings, { bg = bg, text = text, clickable = clickable })
+        end
+    end
+end
+
+function Dropdown:Set(v)
+    self.Value = v
+    self.HeaderText.Text = tostring(v)
+    if self.Callback then self.Callback(v) end
+end
+
+function Dropdown:_layout(x, y, w)
+    self._x, self._y, self._w = x, y, w
+    self._active = true
+    self.Header.Position = Vector2.new(x, y)
+    self.Header.Size = Vector2.new(w, 22)
+    self.HeaderText.Position = Vector2.new(x + 6, y + 4)
+    self.Glyph.Position = Vector2.new(x + w - 14, y + 4)
+    return 22
+end
+
+function Dropdown:SetVisible(v)
+    Control.SetVisible(self, v)
+    for _, entry in ipairs(self.OptionDrawings) do
+        entry.bg.Visible = v
+        entry.text.Visible = v
+    end
+end
+
+function Dropdown:Destroy()
+    Control.Destroy(self)
+    self:_clearOptions()
+end
+
+function Section:Dropdown(label, options, default, callback)
+    local c = Dropdown.new(self, label, options, default, callback)
+    table.insert(self.Controls, c)
+    self.Tab.Window:_layout()
+    return c
+end
+
+--=====================================================================
+-- COLOR PICKER (simple swatch + expandable RGB sliders)
+--=====================================================================
+
+local ColorPicker = setmetatable({}, { __index = Control })
+ColorPicker.__index = ColorPicker
+Lib.ColorPicker = ColorPicker
+
+function ColorPicker.new(section, label, default, callback)
+    local self = setmetatable(Control.new(section), ColorPicker)
+    self.Value = default or Color3.fromRGB(0, 191, 255)
+    self.Callback = callback
+    self.Open = false
+
+    self.Label = self:_track(newDrawing("Text", {
+        Text = label, Color = Theme.Text, Size = Theme.TextSize, Font = Theme.Font, ZIndex = 4,
+    }))
+    self.Swatch = self:_track(newDrawing("Square", {
+        Size = Vector2.new(18, 18), Color = self.Value, Filled = true, ZIndex = 5,
+    }))
+    self.SwatchBorder = self:_track(newDrawing("Square", {
+        Size = Vector2.new(18, 18), Color = Theme.Border, Filled = false, Thickness = 1, ZIndex = 6,
+    }))
+
+    self.RSlider, self.GSlider, self.BSlider = nil, nil, nil
+
+    Input:Register({
+        x = function() return self._swatchX end, y = function() return self._y end,
+        w = function() return 18 end, h = function() return 18 end,
+        active = function() return self._active end,
+        onClick = function() self:Toggle() end,
+    })
+
+    return self
+end
+
+function ColorPicker:Toggle()
+    self.Open = not self.Open
+    self.Section.Tab.Window:_layout()
+end
+
+function ColorPicker:Set(color)
+    self.Value = color
+    self.Swatch.Color = color
+    if self.Callback then self.Callback(color) end
+end
+
+function ColorPicker:_layout(x, y, w)
+    self._x, self._y, self._w = x, y, w
+    self._active = true
+    self.Label.Position = Vector2.new(x, y)
+    self._swatchX = x + w - 22
+    self.Swatch.Position = Vector2.new(self._swatchX, y - 2)
+    self.SwatchBorder.Position = Vector2.new(self._swatchX, y - 2)
+
+    local used = 18
+
+    if self.Open then
+        local r, g, b = math.floor(self.Value.R * 255), math.floor(self.Value.G * 255), math.floor(self.Value.B * 255)
+
+        if not self.RSlider then
+            self.RSlider = Slider.new(self.Section, "R", 0, 255, r, function(v) self:Set(Color3.fromRGB(v, self.GSlider.Value, self.BSlider.Value)) end)
+            self.GSlider = Slider.new(self.Section, "G", 0, 255, g, function(v) self:Set(Color3.fromRGB(self.RSlider.Value, v, self.BSlider.Value)) end)
+            self.BSlider = Slider.new(self.Section, "B", 0, 255, b, function(v) self:Set(Color3.fromRGB(self.RSlider.Value, self.GSlider.Value, v)) end)
+        end
+
+        local sy = y + 22
+        sy = sy + self.RSlider:_layout(x, sy, w) + 6
+        sy = sy + self.GSlider:_layout(x, sy, w) + 6
+        sy = sy + self.BSlider:_layout(x, sy, w) + 6
+        self.RSlider:SetVisible(true)
+        self.GSlider:SetVisible(true)
+        self.BSlider:SetVisible(true)
+        used = (sy - y)
+    else
+        if self.RSlider then
+            self.RSlider:SetVisible(false)
+            self.GSlider:SetVisible(false)
+            self.BSlider:SetVisible(false)
+        end
+    end
+
+    return used
+end
+
+function Section:ColorPicker(label, default, callback)
+    local c = ColorPicker.new(self, label, default, callback)
+    table.insert(self.Controls, c)
+    self.Tab.Window:_layout()
+    return c
+end
+
+--=====================================================================
+-- RETURN
+--=====================================================================
+
+print("[UILibrary] module fully loaded, returning Lib (type: " .. type(Lib) .. ")")
+return Lib
