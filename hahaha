@@ -1348,4 +1348,12 @@ end
 --=====================================================================
 
 print("[UILibrary] module fully loaded, returning Lib (type: " .. type(Lib) .. ")")
-_G.__UILIB = Lib
+
+-- Write to all possible global environments (Matcha may isolate _G in loadstring'd chunks)
+local env = nil
+pcall(function() env = (getfenv and getfenv()) or _G end)
+if type(env) ~= "table" then env = _G end
+pcall(function() env.__UILIB = Lib end)
+pcall(function() if getgenv then getgenv().__UILIB = Lib end end)
+pcall(function() _G.__UILIB = Lib end)
+pcall(function() if shared then shared.__UILIB = Lib end end)
