@@ -1,0 +1,2638 @@
+============================================================
+Page: Home
+URL: https://doc.wabisabi.mom/matcha/
+============================================================
+Matcha
+/
+Getting started
+Getting started
+#
+This is the documentation for the Matcha LuaVM.
+Matcha
+is not an executor
+— it does not hook any functions in the Roblox engine. Instead it emulates them externally, which makes it completely undetected, but also means it has no direct access to internal Roblox API functions.
+Browse the docs
+#
+Globals
+loadstring, identifyexecutor, decompile…
+Console & input
+print, keys, mouse, clipboard
+Scheduler & misc
+wait, task, run_secure, require
+Memory
+getbase, memory_read / memory_write
+Garbage collector
+getgc / setgc / applygc
+Classes
+game, Players, RunService…
+Datatypes
+Vector3, CFrame, Color3…
+Drawing
+the Drawing API
+Resources
+#
+To understand how the LuaVM works, you first need the basics of Lua(U). For that, visit
+https://lua.org
+.
+
+============================================================
+Page: functions-globals
+URL: https://doc.wabisabi.mom/matcha/functions-globals/
+============================================================
+Matcha
+/
+Functions
+/
+Globals
+Globals
+#
+loadstring / load
+#
+lua
+function
+loadstring
+(chunk: string, chunkname: string?)
+:
+function
+function
+load
+(chunk: string, chunkname: string?)
+:
+function
+Compiles
+chunk
+into a callable function (
+load
+is equivalent for string chunks).
+Two Matcha-specific differences: a syntax error still returns a function (the error only prints when the function is called — never
+nil
++ message, so it isn't catchable), and a chunk's top-level
+return
+values are dropped (
+loadstring("return 5")()
+yields nothing — pass results out via globals).
+decompile
+#
+lua
+function
+decompile
+(script: Instance)
+:
+string
+Returns the decompiled source of
+script
+(a
+LocalScript
+,
+ModuleScript
+, or
+Script
+) as a string. If decompilation fails, an error message is printed to the console.
+WorldToScreen
+#
+lua
+function
+WorldToScreen
+(position: Vector3)
+: (Vector2, boolean)
+Projects a 3D world
+position
+into 2D screen space. Returns the screen position in
+pixels
+(top-left origin) and a boolean that is
+true
+when the point is on screen; off screen or behind the camera returns
+(0, 0)
+and
+false
+.
+lua
+local
+pos, onScreen = WorldToScreen(part.Position)
+if
+onScreen
+then
+-- pos.X, pos.Y are valid pixel coordinates
+end
+notify
+#
+lua
+function
+notify
+(message: string, title: string, duration: number)
+Shows a Matcha notification with the given message, title, and duration (seconds). Returns nothing.
+identifyexecutor
+#
+lua
+function
+identifyexecutor
+()
+: (
+string
+,
+string
+)
+Returns
+two
+strings — the executor name (
+"Matcha"
+) and its version (e.g.
+"1.0.0"
+).
+getscripthash
+#
+lua
+function
+getscripthash
+(script: Instance)
+:
+string
+Returns the FNV-1a 64-bit hash of
+script
+'s bytecode, as a decimal string (e.g.
+"9950850631277792934"
+).
+getgamename
+#
+lua
+function
+getgamename
+()
+:
+string
+Returns the name of the current place (e.g.
+"Baseplate"
+). This is the place title, distinct from
+game.Name
+.
+getscripts
+#
+lua
+function
+getscripts
+()
+: { Instance }
+Returns an array of every loaded script instance (
+LocalScript
+,
+ModuleScript
+,
+Script
+) — a large list on a real place.
+getscriptbytecode
+#
+lua
+function
+getscriptbytecode
+(script: Instance)
+:
+string
+Returns the raw compiled bytecode of
+script
+as a binary string.
+base64encode
+#
+lua
+function
+base64encode
+(data: string)
+:
+string
+Encodes
+data
+to a standard Base64 string.
+data
+is treated as null-terminated: encoding
+stops at the first
+\0
+byte
+(
+base64encode("a\0b")
+encodes only
+"a"
+). Base64 here is therefore not safe for arbitrary binary that may contain null bytes.
+base64decode
+#
+lua
+function
+base64decode
+(data: string)
+:
+string
+Decodes a Base64 string back to the original bytes.
+base64decode("")
+returns
+""
+.
+GetPingValue
+#
+lua
+function
+GetPingValue
+()
+: number
+Returns the current ping value (latency to the server) in milliseconds.
+tick
+#
+lua
+function
+tick
+()
+: number
+Returns a high-precision time in seconds, advancing in real time. It's a
+monotonic clock
+, not a Unix timestamp like Roblox's
+tick
+— use it for measuring elapsed time.
+typeof
+#
+lua
+function
+typeof
+(value: any)
+:
+string
+Like
+type
+, but returns the specific name for Roblox datatypes and objects (
+Vector3
+,
+CFrame
+,
+Instance
+,
+Drawing
+, …) instead of
+userdata
+.
+getfenv
+#
+lua
+function
+getfenv
+(target: function | number)
+:
+table
+Returns an environment table. With no argument,
+0
+, or
+1
+, it returns the global environment (
+_G
+). Passing a function returns that function's environment (which differs from
+_G
+only if it was changed with
+setfenv
+).
+setfenv
+#
+lua
+function
+setfenv
+(f: function, env: table)
+:
+function
+Sets the environment of function
+f
+to
+env
+and returns
+f
+. Global lookups inside
+f
+are then resolved from
+env
+instead of
+_G
+.
+lua
+local
+sandbox = {
+print
+=
+print
+}
+setfenv
+(f, sandbox)
+-- f now only sees `sandbox` as its globals
+
+============================================================
+Page: functions-console-input
+URL: https://doc.wabisabi.mom/matcha/functions-console-input/
+============================================================
+Matcha
+/
+Functions
+/
+Console & input
+Console & input
+#
+Console
+#
+print / printl
+#
+lua
+function
+print
+(...)
+Prints its arguments to the console, space-separated.
+printl
+behaves identically.
+warn
+#
+lua
+function
+warn
+(...)
+Prints its arguments as a yellow, warning-styled line, space-separated.
+error
+#
+lua
+function
+error
+(...)
+Prints its arguments as a red, error-styled line; returns
+nil
+.
+Despite the name,
+error
+does
+not
+raise an error or halt execution — it only prints. To raise a
+pcall
+-catchable error, use
+assert(false, message)
+.
+errorl
+#
+lua
+function
+errorl
+(...)
+Identical to
+error
+— a red, error-styled console line. The error-level counterpart to
+warn
+.
+Input
+#
+List of key codes can be found here:
+https://learn.microsoft.com/en-us/windows/win32/inputdev/virtual-key-codes
+setrobloxinput
+#
+lua
+function
+setrobloxinput
+(state: boolean)
+:
+nil
+Toggles whether Matcha's injected input is sent to the game.
+isrbxactive
+#
+lua
+function
+isrbxactive
+()
+: boolean
+Returns
+true
+while the Roblox window is the active (foreground) window.
+setclipboard
+#
+lua
+function
+setclipboard
+(value: string)
+:
+nil
+Copies
+value
+to the system clipboard.
+keypress
+#
+lua
+function
+keypress
+(keycode: int)
+: boolean
+Sends a key-down for
+keycode
+— a Windows virtual-key code (e.g.
+0x41
+=
+A
+). Pair with
+keyrelease
+to release it. Returns
+true
+.
+keyrelease
+#
+lua
+function
+keyrelease
+(keycode: int)
+: boolean
+Sends a key-up for
+keycode
+. Returns
+true
+.
+iskeypressed
+#
+lua
+function
+iskeypressed
+(keycode: int)
+: boolean
+Returns
+true
+while the key for
+keycode
+(Windows VK code) is currently held. Reads live keyboard state.
+ismouse1pressed
+#
+lua
+function
+ismouse1pressed
+()
+: boolean
+Returns
+true
+while the left mouse button is currently held.
+ismouse2pressed
+#
+lua
+function
+ismouse2pressed
+()
+: boolean
+Returns
+true
+while the right mouse button is currently held.
+mouse1press
+#
+lua
+function
+mouse1press
+()
+:
+nil
+Presses and holds the left mouse button.
+mouse1release
+#
+lua
+function
+mouse1release
+()
+:
+nil
+Releases the left mouse button.
+mouse1click
+#
+lua
+function
+mouse1click
+()
+:
+nil
+Performs a full left click (press + release).
+mouse2press
+#
+lua
+function
+mouse2press
+()
+:
+nil
+Presses and holds the right mouse button.
+mouse2release
+#
+lua
+function
+mouse2release
+()
+:
+nil
+Releases the right mouse button.
+mouse2click
+#
+lua
+function
+mouse2click
+()
+:
+nil
+Performs a full right click (press + release).
+mousemoveabs
+#
+lua
+function
+mousemoveabs
+(x: int, y: int)
+:
+nil
+Moves the cursor to the absolute pixel position
+(x, y)
+in the Roblox viewport's coordinate space — origin top-left, the same space as
+Camera.ViewportSize
+and
+WorldToScreen
+. A
+WorldToScreen
+result can be fed straight in.
+mousemoverel
+#
+lua
+function
+mousemoverel
+(x: int, y: int)
+:
+nil
+Moves the cursor by a relative offset
+(x, y)
+in pixels from its current position.
+mousescroll
+#
+lua
+function
+mousescroll
+(amount: int)
+:
+nil
+Scrolls the mouse wheel by
+amount
+; the sign sets the direction.
+
+============================================================
+Page: functions-misc
+URL: https://doc.wabisabi.mom/matcha/functions-misc/
+============================================================
+Matcha
+/
+Functions
+/
+Miscellaneous & scheduler
+Miscellaneous & scheduler
+#
+run_secure
+#
+lua
+function
+run_secure
+(text: string)
+Runs protected code.
+text
+must be a
+base64-encoded protected payload
+— passing plain Lua source raises
+Invalid base64 encoded data - Size not divisible by 4
+. Since the protection tooling isn't public, this function isn't usable with ordinary scripts.
+Code protection is not available to the public.
+Set Fast Flag
+#
+lua
+function
+setfflag
+(FFlag: string, value: string)
+Intended to set the fast flag
+FFlag
+to
+value
+. Marked incomplete (below) — setting a flag has no effect that
+getfflag
+can read back.
+This function is not complete.
+Get Fast Flag
+#
+lua
+function
+getfflag
+(FFlag: string)
+: number
+Intended to read the fast flag
+FFlag
+, but currently a stub — it returns
+0
+for every flag, real or not.
+This function is not complete.
+require
+#
+lua
+function
+require
+(path: string)
+:
+table
+Loads a
+.lua
+/
+.luau
+module by path. The extension is required and validated —
+require("mod")
+raises
+File has no extension
+, and any other extension raises
+Unsupported file extension: .x
+.
+require
+resolves from its own module root,
+separate from the
+writefile
+/
+readfile
+workspace
+— a file that
+isfile
+confirms exists is still reported
+Module file does not exist
+, so you can't
+writefile
+a module and
+require
+it.
+wait
+#
+lua
+function
+wait
+(time: number)
+Yields the current thread for
+time
+seconds. Returns nothing — unlike Roblox's
+wait
+, which returns the elapsed time.
+spawn
+#
+lua
+function
+spawn
+(target: function)
+:
+nil
+Runs
+target
+on a new thread; its body executes right away.
+task.spawn
+#
+lua
+function
+task.spawn
+(target: function)
+:
+nil
+Runs
+target
+immediately on a new thread (synchronously — code after the call waits until
+target
+yields).
+task.spawn
+does not forward extra arguments to
+target
+; use a closure:
+task.spawn(function() myFunc(arg) end)
+.
+task.defer
+#
+lua
+function
+task.defer
+(target: function)
+:
+nil
+Intended to defer
+target
+to the next cycle, but in the current build the callback
+never runs
+(a no-op). Use
+task.spawn
+instead.
+task.delay
+#
+lua
+function
+task.delay
+(time: number, target: function)
+:
+nil
+Intended to run
+target
+after
+time
+seconds, but in the current build the callback
+never runs
+(a no-op, like
+task.defer
+). For delayed work, use
+wait(time)
+inside a
+task.spawn
+'d thread.
+task.wait
+#
+lua
+function
+task.wait
+(time: number?)
+Yields the current thread for
+time
+seconds, or until the next frame if
+time
+is omitted. Returns nothing — unlike Roblox's
+task.wait
+, which returns the elapsed time.
+
+============================================================
+Page: memory
+URL: https://doc.wabisabi.mom/matcha/memory/
+============================================================
+Matcha
+/
+Functions
+/
+Memory
+Memory
+#
+You must allow unsafe LuaU execution before using these functions
+Memory Types
+#
+Memory Types
+Returns
+int
+int
+float
+number
+double
+number
+byte
+int
+string
+string
+uintptr_t
+int
+getbase
+#
+lua
+function
+getbase
+()
+: int
+Returns the base address of the
+RobloxPlayerBeta.exe
+module as a number (e.g.
+140698037846016
+) — the anchor for turning module offsets into absolute addresses.
+memory_write
+#
+lua
+memory_write(memoryType:
+string
+, address: int, value: Any):
+nil
+Writes
+value
+to
+address
+, interpreting it as
+memoryType
+— the same type set as
+memory_read
+(
+int
+,
+float
+,
+double
+,
+byte
+,
+string
+,
+uintptr_t
+). Returns nothing.
+Ensure the address and value type are correct before writing; a write to the wrong address can crash Roblox.
+memory_read
+#
+lua
+memory_read(memoryType:
+string
+, address: int): Any
+Reads the value of type
+memoryType
+at
+address
+(see the
+Memory Types
+table).
+byte
+is 0–255,
+int
+a signed 32-bit integer,
+uintptr_t
+an unsigned 64-bit value, and
+float
+/
+double
+reinterpret the raw bytes. Reading an unmapped address safely returns
+0
+. The
+string
+type reads bytes until the first non-printable one (no length argument).
+
+============================================================
+Page: garbage-collector
+URL: https://doc.wabisabi.mom/matcha/garbage-collector/
+============================================================
+Matcha
+/
+Functions
+/
+Garbage collector
+Garbage collector
+#
+These functions find and modify values held in the game's Lua garbage collector by name, such as weapon stats and other values stored in Lua tables.
+getgc
+#
+lua
+function
+getgc
+(name: string)
+: {
+table
+}
+function
+getgc
+(names: { string })
+: {
+table
+}
+Returns every garbage-collected value stored under
+name
+. Pass a list of names to collect them all in a single scan. The result is an array of entries; each entry is a table:
+key
+— the name the value was found under
+value
+— the current value
+type
+— the value's type (
+number
+,
+string
+,
+boolean
+,
+table
+,
+function
+,
+userdata
+, ...)
+addr
+— the value's memory address
+The same name can be stored in many places, so multiple entries are normal. Returns an empty table if nothing is found.
+setgc
+#
+lua
+function
+setgc
+(key: string, value: Any)
+: int
+function
+setgc
+(values: { [string]: Any })
+: int
+Sets every garbage-collected value stored under
+key
+to
+value
+, scanning the collector on each call. Pass a table to set multiple keys at once. Only values whose type matches
+value
+are changed. Returns the number of values set.
+lua
+-- singular
+setgc(
+"FireRate"
+,
+0
+)
+-- group
+setgc({
+FireRate =
+0
+,
+SpreadAngle =
+0
+,
+CameraRecoilMult =
+0
+,
+MagAmmo =
+999999
+})
+applygc
+#
+lua
+function
+applygc
+(cache: table, key: string, value: Any)
+: int
+function
+applygc
+(cache: table, values: { [string]: Any })
+: int
+Same as
+setgc
+, but applies to a
+cache
+returned by
+getgc
+instead of scanning again. Call
+getgc
+once and reuse the cache with
+applygc
+when setting values repeatedly, such as inside a loop or for values the game keeps resetting. Run
+getgc
+again to refresh the cache if the values are rebuilt, for example after respawning or switching weapons. Returns the number of values set.
+lua
+local
+cache = getgc({
+"FireRate"
+,
+"SpreadAngle"
+,
+"MagAmmo"
+})
+-- singular
+applygc(cache,
+"FireRate"
+,
+0
+)
+applygc(cache,
+"MagAmmo"
+,
+999999
+)
+-- group
+applygc(cache, { FireRate =
+0
+, SpreadAngle =
+0
+, MagAmmo =
+999999
+})
+
+============================================================
+Page: filesystem
+URL: https://doc.wabisabi.mom/matcha/filesystem/
+============================================================
+Matcha
+/
+Functions
+/
+File system
+File system
+#
+Paths are relative to the Matcha workspace folder (e.g.
+C:\matcha\workspace\
+).
+/
+and
+\
+are interchangeable, and paths are case-insensitive.
+readfile
+,
+writefile
+, and
+appendfile
+only accept these extensions:
+.txt
+.lua
+.luau
+.json
+.cfg
+.dat
+.ini
+. Any other extension — including images, audio, and executables — raises
+file extension not allowed
+. Contents are binary-safe, so store raw/binary data under
+.dat
+.
+writefile
+#
+lua
+function
+writefile
+(path: string, content: string)
+:
+nil
+Creates
+path
+(or overwrites it) with
+content
+. Missing parent folders are created automatically. Content is written exactly, including binary data. Errors if
+path
+has a disallowed extension or is an existing folder.
+readfile
+#
+lua
+function
+readfile
+(path: string)
+:
+string
+Returns the contents of
+path
+as a string (binary-safe). Errors if the file does not exist, so guard with
+isfile
+or
+pcall
+.
+lua
+if
+isfile(
+"MyConfig.json"
+)
+then
+local
+raw = readfile(
+"MyConfig.json"
+)
+end
+appendfile
+#
+lua
+function
+appendfile
+(path: string, content: string)
+:
+nil
+Appends
+content
+to the end of
+path
+, creating the file if it does not exist. Content is concatenated exactly — no separator is inserted.
+makefolder
+#
+lua
+function
+makefolder
+(path: string)
+:
+nil
+Creates the folder at
+path
+, including any missing parent folders. Does nothing if the folder already exists. Errors if a file already occupies the path.
+isfile
+#
+lua
+function
+isfile
+(path: string)
+: boolean
+Returns
+true
+only if
+path
+is an existing file;
+false
+for folders or missing paths. Never errors.
+isfolder
+#
+lua
+function
+isfolder
+(path: string)
+: boolean
+Returns
+true
+only if
+path
+is an existing folder;
+false
+for files or missing paths. Never errors.
+listfiles
+#
+lua
+function
+listfiles
+(path: string)
+: {
+string
+}
+Returns the immediate children of
+path
+— files and folders, not recursive — as workspace-relative paths sorted alphabetically (e.g.
+listfiles("cfg")
+→
+{ "cfg\\a.json", "cfg\\sub" }
+). Each entry can be passed straight to
+isfile
+,
+isfolder
+, or
+readfile
+.
+listfiles("")
+lists the workspace root. Errors if
+path
+does not exist or is a file.
+delfile
+#
+lua
+function
+delfile
+(path: string)
+: boolean
+Deletes the file (or empty folder) at
+path
+. Returns
+true
+if something was removed,
+false
+if the path did not exist. Errors if
+path
+is a non-empty folder — use
+delfolder
+for those.
+delfolder
+#
+lua
+function
+delfolder
+(path: string)
+: boolean
+Recursively deletes the folder (or file) at
+path
+and everything inside it. Always returns
+true
+, even if
+path
+did not exist.
+
+============================================================
+Page: http
+URL: https://doc.wabisabi.mom/matcha/http/
+============================================================
+Matcha
+/
+Functions
+/
+HTTP
+HTTP
+#
+httpget
+and
+httppost
+are
+synchronous
+— they block until the response arrives and return the response body as a string. They never raise an error: an HTTP error status (e.g. 404) returns the server's response body, and a connection failure (e.g. an unreachable host) returns an empty string. They are the global equivalents of
+game:HttpGet
+/
+game:HttpPost
+.
+httpget
+#
+lua
+function
+httpget
+(url: string, headers: table?)
+:
+string
+Sends a GET request to
+url
+and returns the response body. Optionally pass a table of request headers.
+lua
+local
+body = httpget(
+"https://example.com/data.json"
+)
+if
+body ~=
+""
+then
+local
+data = game:GetService(
+"HttpService"
+):JSONDecode(body)
+end
+httppost
+#
+lua
+function
+httppost
+(url: string, body: string, contentType: string?, headers: table?)
+:
+string
+Sends a POST request to
+url
+with
+body
+and returns the response body.
+contentType
+defaults to
+"application/json"
+. Optionally pass a table of request headers as the fourth argument.
+lua
+local
+resp = httppost(
+"https://example.com/api"
+,
+'{"action":"ping"}'
+,
+"application/json"
+)
+
+============================================================
+Page: lua-base-library
+URL: https://doc.wabisabi.mom/matcha/lua-base-library/
+============================================================
+Matcha
+/
+Functions
+/
+Lua base library
+Lua base library
+#
+Matcha runs on a Luau-based VM, so the standard Lua(U) global functions are available and behave per the
+Lua 5.1 reference
+except
+where noted below. This page lists what the VM actually exposes and flags the Matcha-specific differences — it does not re-document standard Lua semantics.
+Type & conversion
+#
+type
+#
+lua
+function
+type
+(value: any)
+:
+string
+Standard. Roblox datatypes (
+Vector3
+,
+CFrame
+, …) and Instances all report as
+"userdata"
+— use
+typeof
+for the specific name.
+tostring
+#
+lua
+function
+tostring
+(value: any)
+:
+string
+Standard, and honors
+__tostring
+. Matcha formats Roblox datatypes differently from Roblox itself —
+tostring(Vector3.new(1, 2, 3))
+returns
+"Vector3(1.0000, 2.0000, 3.0000)"
+, not
+"1, 2, 3"
+.
+tonumber
+#
+lua
+function
+tonumber
+(value: any, base: number?)
+: number?
+Standard. Trims surrounding whitespace, parses
+0x
+hex, and accepts a
+base
+(2–36) —
+tonumber("ff", 16)
+returns
+255
+. Returns
+nil
+if the value can't be parsed.
+Iteration & varargs
+#
+pairs / ipairs / next
+#
+lua
+function
+pairs
+(t: table)
+: (
+function
+,
+table
+,
+any
+)
+function
+ipairs
+(t: table)
+: (
+function
+,
+table
+,
+number
+)
+function
+next
+(t: table, key: any?)
+: (any, any)
+Standard iteration;
+ipairs
+stops at the first
+nil
+hole.
+pairs
+does
+not
+honor the Luau
+__iter
+metamethod — it always iterates the raw table.
+select
+#
+lua
+function
+select
+(n: number | "#", ...)
+: ...
+Standard, including
+negative indices
+:
+select(-1, ...)
+returns the last argument.
+unpack
+#
+lua
+function
+unpack
+(t: table, i: number?, j: number?)
+: ...
+Returns
+t[i]
+through
+t[j]
+(defaults
+i = 1
+,
+j = #t
+). Exposed as a
+global
+— mainline Luau only provides
+table.unpack
+.
+unpack
+and
+table.unpack
+are separate function objects but behave identically.
+Errors & protected calls
+#
+assert
+#
+lua
+function
+assert
+(value: any, message: string?, ...)
+: ...
+Raises a catchable error (
+Matcha:<line>: <message>
+, or
+assertion failed!
+with no message) if
+value
+is falsy; otherwise returns its arguments unchanged — the way to raise a catchable error in Matcha.
+pcall
+#
+lua
+function
+pcall
+(f: function, ...)
+: (boolean, ...)
+Standard. Returns
+true
+plus
+f
+'s results on success, or
+false, "Matcha:<line>: <message>"
+on a runtime fault.
+xpcall
+#
+lua
+function
+xpcall
+(f: function, handler: function, ...)
+: (boolean, ...)
+Standard, and
+forwards extra arguments to
+f
+(Luau-style):
+xpcall(fn, handler, 3, 4)
+calls
+fn(3, 4)
+. On a real error,
+handler
+runs with the error message.
+Metatables
+#
+setmetatable / getmetatable
+#
+lua
+function
+setmetatable
+(t: table, mt: table?)
+:
+table
+function
+getmetatable
+(t: any)
+:
+table
+| any
+Standard.
+getmetatable
+returns the
+__metatable
+field when set;
+setmetatable
+on a table with a protected (
+__metatable
+) metatable raises
+cannot change a protected metatable
+.
+newproxy
+#
+lua
+function
+newproxy
+(addMetatable: boolean?)
+: userdata
+Lua 5.1 holdover, fully supported. Returns a blank
+userdata
+; with
+newproxy(true)
+it gets a fresh, settable metatable (retrieved via
+getmetatable
+), so metamethods like
+__index
+and
+__tostring
+work.
+Raw access
+#
+rawget / rawset / rawequal / rawlen
+#
+lua
+function
+rawget
+(t: table, key: any)
+: any
+function
+rawset
+(t: table, key: any, value: any)
+:
+table
+function
+rawequal
+(a: any, b: any)
+: boolean
+function
+rawlen
+(t: table | string)
+: number
+Standard. These bypass metamethods;
+rawset
+returns the table.
+Memory
+#
+gcinfo
+#
+lua
+function
+gcinfo
+()
+: number
+Returns the VM's current memory usage in kilobytes.
+
+============================================================
+Page: classes
+URL: https://doc.wabisabi.mom/matcha/classes/
+============================================================
+Matcha
+/
+Reference
+/
+Classes
+Classes
+#
+BasePart
+#
+https://create.roblox.com/docs/reference/engine/classes/BasePart
+Properties
+Size
+#
+lua
+BasePart.Size: Vector3
+Position
+#
+lua
+BasePart.Position: Vector3
+Transparency
+#
+lua
+BasePart.Transparency: number
+Color
+#
+lua
+BasePart.Color: Color3
+Velocity
+#
+lua
+BasePart.Velocity: Vector3
+AssemblyLinearVelocity
+#
+lua
+BasePart.AssemblyLinearVelocity: Vector3
+CanCollide
+#
+lua
+BasePart.CanCollide: bool
+Camera
+#
+https://create.roblox.com/docs/reference/engine/classes/Camera
+Constructors
+lookAt
+#
+lua
+Camera.lookAt(at: Vector3, lookAt: Vector3)
+Properties
+ViewportSize
+#
+lua
+Camera.ViewportSize: Vector2
+FieldOfView
+#
+lua
+Camera.FieldOfView: number
+Position
+#
+lua
+Camera.Position: Vector3
+DataModel
+#
+https://create.roblox.com/docs/reference/engine/classes/DataModel
+Properties
+PlaceId
+#
+lua
+Instance.PlaceId: number
+GameId
+#
+lua
+Instance.GameId: number
+JobId
+#
+lua
+Instance.JobId:
+string
+Methods
+HttpGet
+#
+lua
+function
+DataModel:HttpGet
+(url: string, headers: table?)
+:
+string
+HttpPost
+#
+lua
+function
+DataModel:HttpPost
+(url: string, data: string, contentType: string?, headers: table?)
+:
+string
+GetService
+#
+lua
+function
+DataModel:GetService
+(name: string)
+: Instance
+HttpService
+#
+Methods
+JSONEncode
+#
+lua
+function
+HttpService:JSONEncode
+(tbl: table)
+:
+string
+JSONDecode
+#
+lua
+function
+HttpService:JSONDecode
+(str: string)
+:
+table
+GenerateGUID
+#
+lua
+function
+HttpService:GenerateGUID
+()
+:
+string
+Humanoid
+#
+https://create.roblox.com/docs/reference/engine/classes/Humanoid
+Properties
+MaxHealth
+#
+lua
+Humanoid.MaxHealth: number
+Health
+#
+lua
+Humanoid.Health: number
+Model
+#
+https://create.roblox.com/docs/reference/engine/classes/Model
+Properties
+PrimaryPart
+#
+lua
+Model.PrimaryPart: BasePart
+Workspace
+#
+https://create.roblox.com/docs/reference/engine/classes/Workspace
+Properties
+CurrentCamera
+#
+lua
+Workspace.CurrentCamera: Camera
+Instance
+#
+https://create.roblox.com/docs/reference/engine/classes/Instance
+Properties
+Name
+#
+lua
+Instance.Name:
+string
+ClassName
+#
+lua
+Instance.ClassName:
+string
+Parent
+#
+lua
+Instance.Parent: Instance
+Address
+#
+lua
+Instance.Address: number
+Hexadecimal number representing the Instance’s memory address.
+Methods
+FindFirstChildOfClass
+#
+lua
+function
+Instance:FindFirstChildOfClass
+(name: string)
+: Instance
+FindFirstChild
+#
+lua
+function
+Instance:FindFirstChild
+(name: string)
+: Instance
+IsA
+#
+lua
+function
+Instance:IsA
+(name: string)
+: boolean
+GetFullName
+#
+lua
+function
+Instance:GetFullName
+()
+:
+string
+GetChildren
+#
+lua
+function
+Instance:GetChildren
+()
+: { Instance }
+GetAttribute
+#
+lua
+function
+Instance:GetAttribute
+(name: string)
+: any
+GetAttributes
+#
+lua
+function
+Instance:GetAttributes
+()
+: {
+string
+}
+SetAttribute
+#
+lua
+function
+Instance:SetAttribute
+(name: string, value: any)
+:
+nil
+GetDescendants
+#
+lua
+function
+Instance:GetDescendants
+()
+: { Instance }
+IsDescendantOf
+#
+lua
+function
+Instance:IsDescendantOf
+(parent: Instance)
+: boolean
+FindFirstChildWhichIsA
+#
+lua
+function
+Instance:FindFirstChildWhichIsA
+(class: string)
+: Instance
+WaitForChild
+#
+lua
+function
+Instance:WaitForChild
+(name: string)
+: Instance
+Mouse
+#
+https://create.roblox.com/docs/reference/engine/classes/Mouse
+Properties
+X
+#
+lua
+Mouse.X: number
+Y
+#
+lua
+Mouse.Y: number
+Players
+#
+https://create.roblox.com/docs/reference/engine/classes/Players
+Properties
+LocalPlayer
+#
+lua
+Players.LocalPlayer: Player
+GetPlayers
+#
+lua
+function
+Players:GetPlayers
+()
+: Table
+Events
+PlayerAdded
+#
+lua
+Players.PlayerAdded:Connect(
+function
+(player)
+)
+PlayerRemoving
+#
+lua
+Players.PlayerRemoving:Connect(
+function
+(player)
+)
+Player
+#
+https://create.roblox.com/docs/reference/engine/classes/Player
+Properties
+Character
+#
+lua
+Player.Character: Model
+Team
+#
+lua
+Player.Team: Team
+Methods
+GetMouse
+#
+lua
+function
+Player:GetMouse
+()
+: Mouse
+ValueBase
+#
+https://create.roblox.com/docs/reference/engine/classes/ValueBase
+ObjectValue
+,
+Color3Value
+,
+NumberValue
+,
+IntValue
+,
+FloatValue
+,
+BoolValue
+, and
+StringValue
+all inherit from this class. For simplicity, they do not have separate sub-pages.
+Properties
+Value
+#
+lua
+ValueBase.Value: any
+GuiObject
+#
+https://create.roblox.com/docs/reference/engine/classes/GuiObject
+Properties
+AbsoluteSize
+#
+lua
+GuiObject.AbsoluteSize: Vector2
+AbsolutePosition
+#
+lua
+GuiObject.AbsolutePosition: Vector2
+TextLabel
+#
+https://create.roblox.com/docs/reference/engine/classes/TextLabel
+Properties
+Text
+#
+lua
+TextLabel.Text:
+string
+MeshPart
+#
+https://create.roblox.com/docs/reference/engine/classes/MeshPart
+Properties
+TextureId
+#
+lua
+MeshPart.TextureId:
+string
+MeshId
+#
+lua
+MeshPart.MeshId:
+string
+UserInputService
+#
+lua
+local
+UserInputService = game:GetService(
+"UserInputService"
+)
+Events
+InputBegan
+#
+lua
+UserInputService.InputBegan:Connect(
+function
+(input: InputObject, gameProcessed: boolean)
+)
+InputEnded
+#
+lua
+UserInputService.InputEnded:Connect(
+function
+(input: InputObject, gameProcessed: boolean)
+)
+RunService
+#
+https://create.roblox.com/docs/reference/engine/classes/RunService
+The
+RunService
+service contains methods and events for managing the execution of the game/simulation.
+Events
+RenderStepped
+#
+lua
+RunService.RenderStepped:Connect(
+function
+(deltaTime: number)
+)
+Fires every frame, prior to the frame being rendered. Passes the time elapsed since the last frame (
+deltaTime
+) as a number.
+Heartbeat
+#
+lua
+RunService.Heartbeat:Connect(
+function
+(deltaTime: number)
+)
+Fires every frame, after the physics simulation has completed. Passes the time elapsed since the last frame (
+deltaTime
+) as a number.
+Stepped
+#
+lua
+RunService.Stepped:Connect(
+function
+(deltaTime: number)
+)
+Fires every frame, prior to the physics simulation step. Passes the time elapsed since the last frame (
+deltaTime
+) as a number.
+In the Matcha VM, the
+Stepped
+event only receives one argument (
+deltaTime: number
+), unlike the standard Roblox API which receives both
+time
+and
+deltaTime
+.
+
+============================================================
+Page: datatypes
+URL: https://doc.wabisabi.mom/matcha/datatypes/
+============================================================
+Matcha
+/
+Reference
+/
+Datatypes
+Datatypes
+#
+Vector3
+#
+https://create.roblox.com/docs/reference/engine/datatypes/Vector3
+The
+Vector3
+data type represents a vector in 3D space, typically used as a point in 3D space or the dimensions of a rectangular prism.
+Constructors
+new
+#
+lua
+Vector3.new(x: number, y: number, z: number)
+Returns a new
+Vector3
+from the given x, y, and z components.
+zero
+#
+lua
+Vector3.zero: Vector3
+Returns a
+Vector3
+with coordinates (0, 0, 0).
+one
+#
+lua
+Vector3.one: Vector3
+Returns a
+Vector3
+with coordinates (1, 1, 1).
+xAxis
+#
+lua
+Vector3.xAxis: Vector3
+Returns a
+Vector3
+with coordinates (1, 0, 0).
+yAxis
+#
+lua
+Vector3.yAxis: Vector3
+Returns a
+Vector3
+with coordinates (0, 1, 0).
+zAxis
+#
+lua
+Vector3.zAxis: Vector3
+Returns a
+Vector3
+with coordinates (0, 0, 1).
+Properties
+X
+#
+lua
+Vector3.X: number
+Y
+#
+lua
+Vector3.Y: number
+Z
+#
+lua
+Vector3.Z: number
+Magnitude
+#
+lua
+Vector3.Magnitude: number
+Returns the length of the vector.
+Unit
+#
+lua
+Vector3.Unit: Vector3
+Returns a vector of length 1 pointing in the same direction as the original vector.
+Operations
+Matcha supports the following mathematical operations on
+Vector3
+types:
+Addition / Subtraction
+:
+Vector3 + Vector3
+,
+Vector3 - Vector3
+Multiplication / Division
+:
+Vector3 * Vector3
+,
+Vector3 / Vector3
+,
+Vector3 * number
+,
+Vector3 / number
+,
+number * Vector3
+Unary Minus
+:
+-Vector3
+Equality
+:
+Vector3 == Vector3
+Methods
+Abs
+#
+lua
+function
+Vector3:Abs
+()
+: Vector3
+Returns a Vector3 with the absolute value of each component.
+Angle
+#
+lua
+function
+Vector3:Angle
+(other: Vector3)
+: number
+Returns the angle between the two vectors in radians.
+Ceil
+#
+lua
+function
+Vector3:Ceil
+()
+: Vector3
+Returns a Vector3 with the components rounded up to the nearest integer.
+Cross
+#
+lua
+function
+Vector3:Cross
+(other: Vector3)
+: Vector3
+Returns the cross product of the two vectors.
+Dot
+#
+lua
+function
+Vector3:Dot
+(other: Vector3)
+: number
+Returns the dot product of the two vectors.
+Floor
+#
+lua
+function
+Vector3:Floor
+()
+: Vector3
+Returns a Vector3 with the components rounded down to the nearest integer.
+FuzzyEq
+#
+lua
+function
+Vector3:FuzzyEq
+(other: Vector3, epsilon: number)
+: boolean
+Returns true if the two vectors are approximately equal within the specified epsilon.
+Lerp
+#
+lua
+function
+Vector3:Lerp
+(target: Vector3, alpha: number)
+: Vector3
+Linearly interpolates between the vector and the target vector by alpha.
+Max
+#
+lua
+function
+Vector3:Max
+(other: Vector3)
+: Vector3
+Returns a Vector3 where each component is the maximum of the corresponding components in the two vectors.
+Min
+#
+lua
+function
+Vector3:Min
+(other: Vector3)
+: Vector3
+Returns a Vector3 where each component is the minimum of the corresponding components in the two vectors.
+Sign
+#
+lua
+function
+Vector3:Sign
+()
+: Vector3
+Returns a Vector3 indicating the sign of each component (-1, 0, or 1).
+CFrame
+#
+https://create.roblox.com/docs/reference/engine/datatypes/CFrame
+The
+CFrame
+(Coordinate Frame) data type describes a position and rotation in 3D space.
+Constructors
+new
+#
+lua
+CFrame.new()
+Returns an identity CFrame at position (0, 0, 0) with no rotation.
+lua
+CFrame.new(x: number, y: number, z: number)
+Returns a CFrame at position (x, y, z) with no rotation.
+lua
+CFrame.new(x: number, y: number, z: number, qx: number, qy: number, qz: number, qw: number)
+Returns a CFrame with position (x, y, z) and rotation defined by quaternion components (qx, qy, qz, qw).
+lua
+CFrame.new(x: number, y: number, z: number, r00: number, r01: number, r02: number, r10: number, r11: number, r12: number, r20: number, r21: number, r22: number)
+Returns a CFrame with position (x, y, z) and rotation defined by the rotation matrix components.
+CFrame.new
+expects exactly 0, 3, 6, or 12 arguments.
+Angles
+#
+lua
+CFrame.Angles(rx: number, ry: number, rz: number)
+Returns a CFrame with position (0, 0, 0) and rotation defined by the specified Euler angles (in radians).
+fromOrientation
+#
+lua
+CFrame.fromOrientation(rx: number, ry: number, rz: number)
+Returns a CFrame with position (0, 0, 0) and rotation defined by the specified Euler angles (in radians), applied in YXZ order.
+Properties
+X
+#
+lua
+CFrame.X: number
+The X coordinate of the CFrame's position.
+Y
+#
+lua
+CFrame.Y: number
+The Y coordinate of the CFrame's position.
+Z
+#
+lua
+CFrame.Z: number
+The Z coordinate of the CFrame's position.
+Position
+#
+lua
+CFrame.Position: Vector3
+The position of the CFrame as a
+Vector3
+.
+LookVector
+#
+lua
+CFrame.LookVector: Vector3
+The forward-pointing unit vector of the CFrame (the negative Z axis).
+RightVector
+#
+lua
+CFrame.RightVector: Vector3
+The right-pointing unit vector of the CFrame (the X axis).
+UpVector
+#
+lua
+CFrame.UpVector: Vector3
+The upward-pointing unit vector of the CFrame (the Y axis).
+Operations
+Matcha supports the following mathematical operations on
+CFrame
+types:
+CFrame Multiplication
+:
+CFrame * CFrame
+composition.
+Vector Transformation
+:
+CFrame * Vector3
+to transform a point into world space.
+Equality
+:
+CFrame == CFrame
+(uses reference equality).
+Methods
+GetComponents
+#
+lua
+function
+CFrame:GetComponents
+()
+: (number, number, number, number, number, number, number, number, number, number, number, number)
+Returns the components of the CFrame: position
+x
+,
+y
+,
+z
+and the 9 rotation matrix components
+r00
+,
+r01
+,
+r02
+,
+r10
+,
+r11
+,
+r12
+,
+r20
+,
+r21
+,
+r22
+.
+Inverse
+#
+lua
+function
+CFrame:Inverse
+()
+: CFrame
+Returns the inverse of this CFrame.
+Lerp
+#
+lua
+function
+CFrame:Lerp
+(target: CFrame, alpha: number)
+: CFrame
+Linearly interpolates between this CFrame and the target CFrame by alpha.
+PointToObjectSpace
+#
+lua
+function
+CFrame:PointToObjectSpace
+(v: Vector3)
+: Vector3
+Transforms a Vector3 point from world space to the CFrame's local object space.
+PointToWorldSpace
+#
+lua
+function
+CFrame:PointToWorldSpace
+(v: Vector3)
+: Vector3
+Transforms a Vector3 point from the CFrame's local object space to world space.
+ToEulerAnglesXYZ
+#
+lua
+function
+CFrame:ToEulerAnglesXYZ
+()
+: (number, number, number)
+Returns the Euler angles (in radians) of this CFrame using XYZ order.
+ToOrientation
+#
+lua
+function
+CFrame:ToOrientation
+()
+: (number, number, number)
+Returns the Euler angles (in radians) of this CFrame using YXZ order.
+VectorToObjectSpace
+#
+lua
+function
+CFrame:VectorToObjectSpace
+(v: Vector3)
+: Vector3
+Transforms a Vector3 vector from world space to local object space.
+VectorToWorldSpace
+#
+lua
+function
+CFrame:VectorToWorldSpace
+(v: Vector3)
+: Vector3
+Transforms a Vector3 vector from local object space to world space.
+Vector2
+#
+https://create.roblox.com/docs/reference/engine/datatypes/Vector2
+The
+Vector2
+data type represents a 2D value with direction and magnitude. Some applications include GUI elements and 2D mouse positions.
+Constructors
+new
+#
+lua
+Vector2.new(x : number, y : number)
+Returns a
+Vector2
+from the given x and y components.
+Properties
+X
+#
+lua
+Vector2.X: number
+Y
+#
+lua
+Vector2.Y: number
+Color3
+#
+The
+Color3
+data type describes a color using red, green, and blue components in the range of 0 to 1. Unlike the
+BrickColor
+data type which describes named colors,
+Color3
+is used for precise coloring of objects on screen through properties like
+BasePart.Color
+.
+Constructors
+new
+#
+lua
+Color3.new(red: number, green: number, blue: number)
+Returns a
+Color3
+with the given red, green, and blue values.
+fromRGB
+#
+lua
+Color3.fromRGB(red: number, green: number, blue: number)
+Returns a
+Color3
+from given components within the range of 0 to 255.
+fromHSV
+#
+lua
+Color3.fromHSV(hue: number, saturation: number, value: number)
+Returns a
+Color3
+from the given hue, saturation, and value components.
+fromHex
+#
+lua
+Color3.fromHex(hex:
+string
+)
+Returns a
+Color3
+from a given hex value.
+Properties
+R
+#
+lua
+Color3.R: number
+G
+#
+lua
+Color3.G: number
+B
+#
+lua
+Color3.B: number
+
+============================================================
+Page: drawing
+URL: https://doc.wabisabi.mom/matcha/drawing/
+============================================================
+Matcha
+/
+Reference
+/
+Drawing
+Drawing
+#
+The following snippet will display a red square on the user's screen for 5 seconds.
+lua
+local
+square = Drawing.new(
+"Square"
+)
+square.Filled =
+true
+square.Color = Color3.fromRGB(
+255
+,
+0
+,
+0
+)
+square.Position = Vector2.new(
+20
+,
+20
+)
+square.Size = Vector2.new(
+200
+,
+200
+)
+square.Visible =
+true
+square.Corner =
+20
+wait(
+5
+)
+square:Remove()
+Drawing.new
+#
+lua
+Drawing.new(drawingType:
+string
+): DrawingObject
+drawingType
+must be one of the following types:
+Square
+Line
+Circle
+Text
+Triangle
+Image
+DrawingObject
+#
+Methods
+Remove
+#
+lua
+function
+DrawingObject:Remove
+()
+:
+nil
+Base properties
+Shared set of properties across all
+DrawingObject
+types
+Color
+#
+lua
+DrawingObject.Color: Color3
+Transparency
+#
+lua
+DrawingObject.Transparency: number
+Visible
+#
+lua
+DrawingObject.Visible: bool
+Position
+#
+lua
+DrawingObject.Position: Vector2
+ZIndex
+#
+lua
+DrawingObject.ZIndex: int
+Square properties
+Size
+#
+lua
+DrawingObject.Size: Vector2
+Filled
+#
+lua
+DrawingObject.Filled: bool
+Line properties
+From
+#
+lua
+DrawingObject.From: Vector2
+To
+#
+lua
+DrawingObject.To: Vector2
+Thickness
+#
+lua
+DrawingObject.Thickness: int
+Circle properties
+Radius
+#
+lua
+DrawingObject.Radius: float
+NumSides
+#
+lua
+DrawingObject.NumSides: int
+Thickness
+#
+lua
+DrawingObject.Thickness: int
+Text properties
+Text
+#
+lua
+DrawingObject.Text:
+string
+Outline
+#
+lua
+DrawingObject.Outline: bool
+Center
+#
+lua
+DrawingObject.Center: bool
+Font
+#
+lua
+DrawingObject.Font: Font
+FontSize
+#
+lua
+DrawingObject.FontSize: int
+Triangle properties
+PointA
+#
+lua
+DrawingObject.PointA: Vector2
+PointB
+#
+lua
+DrawingObject.PointB: Vector2
+PointC
+#
+lua
+DrawingObject.PointC: Vector2
+Image properties
+Data
+#
+lua
+DrawingObject.Data:
+string
+The raw binary string of the image data (e.g. loaded via
+game:HttpGet
+).
+Image Size
+#
+lua
+DrawingObject.Size: Vector2
+The width and height of the image (defaults to 50x50).
+Rounding
+#
+lua
+DrawingObject.Rounding: number
+The rounding radius of the image corners (defaults to 0).
+Fonts
+#
+lua
+Drawing.Fonts.UI
+-- ProggyClean
+Drawing.Fonts.System
+-- San Francisco
+Drawing.Fonts.SystemBold
+-- SF Bold
+Drawing.Fonts.Minecraft
+-- Minecraft
+Drawing.Fonts.Monospace
+-- JetBrains
+Drawing.Fonts.Pixel
+-- Pixel
+Drawing.Fonts.Fortnite
+-- Fortnite
