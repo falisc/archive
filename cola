@@ -2133,8 +2133,9 @@ function Window.new(config)
     -- loading method as Logo and remains deliberately subtle behind controls.
     self.backgroundUrl = config.Background
     self.backgroundOpacity = tonumber(config.BackgroundOpacity) or 0.24
-    -- The built-in Default config keeps the URL but starts the image disabled.
-    self.backgroundEnabled = false
+    -- A supplied creation-time URL is intended to be visible immediately.
+    -- Windows without one still start with the background feature disabled.
+    self.backgroundEnabled = self.backgroundUrl ~= nil and self.backgroundUrl ~= ""
     self.backgroundImage = nil
     if self.backgroundUrl and self.backgroundUrl ~= "" then
         local spawnFn = (task and task.spawn) or spawn
